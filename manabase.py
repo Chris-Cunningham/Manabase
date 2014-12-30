@@ -45,11 +45,11 @@ onthedraw = False
 mulligans = True
 
 # deckfile = 'decks/scgpc-mardu-midrange-kent-ketter.txt'
-deckfile = 'decks/scgpc-abzan-aggro-BBD.txt'
+# deckfile = 'decks/scgpc-abzan-aggro-BBD.txt'
 # deckfile = 'decks/scgpc-uw-heroic-tom-ross.txt'
 # deckfile = 'decks/scgpc-rg-aggro-logan-mize.txt'
 # deckfile = 'decks/scgpc-jeskai-tokens-ross-merriam.txt'
-# deckfile = 'decks/scgpc-temur-midrange-jeff-hoogland.txt'
+deckfile = 'decks/scgpc-temur-midrange-jeff-hoogland.txt'
 # deckfile = 'decks/scgpc-uw-control-jim-davis.txt'
 
 debug = {}
@@ -85,6 +85,7 @@ class LineOfPlay:
 		# The things we can do with a line of play include "drawing a card":
 		# Pop the first item out of the list and put it in your hand.
 		self.hand.append(self.deck.pop(0))
+		if debug['DrawCard']: print('  Drew a card:',lineofplay)
 
 	def manaAvailable(self):
 		# In a certain line of play, we want to know which combination of mana is available. New lands aren't available.
@@ -148,17 +149,18 @@ def parseLands(decklist):
 	# landsDatabase['Temple of Epiphany'] = ['{U}','{R}']
 	# landsDatabase['Flooded Strand'] = ['FetchU','FetchW']
 
-	# A decklist is a dictionary with key being the name of the card, and value being the number of copies in the deck.
+	if debug['parseLands']: print('')
+	if debug['parseLands']: print('Beginning Land Parser.')
+
 	global landsDatabase 
 	landsDatabase = {}
+
+	# Every lands database needs some basic lands.
 	landsDatabase['Island'] = [ManaPool('{U}')]
 	landsDatabase['Mountain'] = [ManaPool('{R}')]
 	landsDatabase['Swamp'] = [ManaPool('{B}')]
 	landsDatabase['Forest'] = [ManaPool('{G}')]
 	landsDatabase['Plains'] = [ManaPool('{W}')]
-
-	if debug['parseLands']: print('')
-	if debug['parseLands']: print('Beginning Land Parser.')
 
 	for card in decklist:
 		if isLand(card) and card not in landsDatabase:
@@ -180,12 +182,14 @@ def parseLands(decklist):
 				# Parse through the text looking for "scry" or "fetch."
 				if 'scry' in cardDatabase[card]['text']:
 					landsDatabase[card].append('scry')
+				# This mana confluence catcher is definitely going to cause some false positives; TODO
 				if 'any color' in cardDatabase[card]['text']:
 					landsDatabase[card].append(ManaPool('{W}'))
 					landsDatabase[card].append(ManaPool('{U}'))
 					landsDatabase[card].append(ManaPool('{R}'))
 					landsDatabase[card].append(ManaPool('{B}'))
 					landsDatabase[card].append(ManaPool('{G}'))
+				# This fetchland catcher is also going to cause some false positives, like Evolving Wilds TODO
 				if 'Search your library' in  cardDatabase[card]['text']:
 					if 'Plains' in cardDatabase[card]['text']:
 						landsDatabase[card].append('FetchW')
@@ -208,7 +212,8 @@ class ManaPool:
 	# We will store this as a number, some blue, some red, and so on.
 	# A mana cost like {3}{U}{U}{G} needs to be the thing that starts it.
 	def __init__(self, manacost):
-		# This implementation would completely fail for, say, Boros Reckoner.
+		# This implementation would completely fail for, say, Boros Reckoner -- but that's why it is called
+		# a Mana Pool, and not a Mana Cost. This implementation should allow all possible Mana Pools.
 		self.colorless = 0
 		self.blue = 0
 		self.green = 0
@@ -241,6 +246,7 @@ class ManaPool:
 				# This is useful if the mana cost is 15, so we don't end up adding 6 to the mana cost.
 				currentsymbol += char
 	def __repr__(self):
+		# The initializer for a mana pool is something like the string '{3}{W}{W}{G}', so the string representation gives back a string like that.
 		string = ''
 		if self.colorless > 0:
 			string += ('{' + str(self.colorless) + '}')
@@ -258,8 +264,8 @@ class ManaPool:
 			return '{0}'
 		return string
 
-	# += is implemented
 	def __iadd__(self, other):
+		# This implements += for mana pools.
 		self.colorless += other.colorless
 		self.blue += other.blue
 		self.green += other.green
@@ -269,7 +275,7 @@ class ManaPool:
 		return self
 
 	def __add__(self, other):
-		# This feels like a really bad way to implement plus?
+		# This lets us add mana pools with just plus signs.
 		thesum = ManaPool('{0}')
 		thesum.colorless = self.colorless + other.colorless
 		thesum.blue = self.blue + other.blue
@@ -280,6 +286,7 @@ class ManaPool:
 		return thesum
 
 	def __eq__(self, other):
+		# Mana Pools are equal if they have the same type and the dictionaries underneath are the same.
 		if type(other) is type(self):
 			return self.__dict__ == other.__dict__
 		return False
@@ -289,6 +296,7 @@ def isLand(card):
 	return ('Land' in cardDatabase[card]['types'])
 
 def is_int(s):
+	# I feel like Python probably had this function somewhere, but whatever.
     try:
         int(s)
         return True
@@ -304,14 +312,21 @@ def landsInHand(lineofplay):
 	return landsinhand
 
 def continuePlaying(lineofplay,drawacard):
+	# Okay; this is the core of the program. To "continue playing" a line of play,
+	# you need to first draw a card, then look at all the lands you could play
+	# and all the choices you could make from playing those lands. For each of those
+	# possible land plays, you check how castable all the spells are with that play, 
+	# continuePlaying() from there. This creates a recursive tree of lines of play
+	# which is only stopped by the maxturns number at the top of the program.
+	# I highly recommend low values of maxturns.
 
-	# If all the cards we are checking on have already been cast, then we don't actually have to even play another land.
+	# Optimization: If all the cards we are checking on have already been cast, then we don't actually have to even play another land.
 	if 0 in caststhistrial[len(lineofplay.plays)].values():
 		if debug['DrawCard']: print('  Casts this trial:',caststhistrial)
+
 		# Start by drawing a card, if we are supposed to.
 		if drawacard:
 			lineofplay.draw_card()
-			if debug['DrawCard']: print('  Drew a card:',lineofplay)
 
 		# Go through each card; if that is a land that we haven't tried yet, make a new line of play for it.
 		landstotry = []
@@ -319,9 +334,8 @@ def continuePlaying(lineofplay,drawacard):
 			card = lineofplay.hand[i]
 			if isLand(card):
 				landstotry.append(card)
-
 		for card in set(landstotry):
-			# If it is a fetchland, we'll want to make two lines of play for the two fetch options. Todo: Pay 1 life
+			# If it is a fetchland, we'll want to make two lines of play for the two fetch options. TODO: Pay 1 life TODO: Evolving Wilds/Terramorphic Expanse
 			if 'FetchU' in landsDatabase[card] or 'FetchW' in landsDatabase[card] or 'FetchB' in landsDatabase[card] or 'FetchG' in landsDatabase[card] or 'FetchR' in landsDatabase[card]:
 				for fetchOption in landsDatabase[card]:
 					if fetchOption == 'FetchU':
@@ -340,6 +354,7 @@ def continuePlaying(lineofplay,drawacard):
 					# Remove our card from the hand and away entirely (we don't have a graveyard).
 					newlineofplay.hand.remove(card)
 					if fetch in newlineofplay.deck:
+						# TODO: We don't need to get the first Mountain if we are fetching a mountain. There might be lots of different cards with subtype Mountain to go for!
 						i = newlineofplay.deck.index(fetch)
 						# Pop the appropriate card from the deck and into play.
 						newlineofplay.plays.append([newlineofplay.deck.pop(i)])	
@@ -378,19 +393,20 @@ def continuePlaying(lineofplay,drawacard):
 	lineofplay.plays.append([])
 	checkCastable(lineofplay)
 
+	# Then keep going, if there are still turns to go.
 	if len(lineofplay.plays) < maxturns:
 		continuePlaying(lineofplay,True)
 
 def checkCastable(lineofplay):
-	# Here we have a line of play where the current turn has its land played, but the "Casts" have not been updated.
+	# This function is called when we have a line of play where the current turn has its land played, but the "Casts" have not been updated.
 	if debug['CastSpell']: print('     checkCastable on:',lineofplay)
 	turn = len(lineofplay.plays)
 
-	# This returns a sequence of ManaPool objects, the various things we could make with this mana.
+	# This returns a sequence of ManaPool objects, the various mana pools we could make with this land.
 	manaAvailable = lineofplay.manaAvailable()
 	if debug['CastSpell']: print('       Mana options available:',manaAvailable)
 
-	# At the moment the only spells we are counting are opening hand spells. Those are stored in the global spellsthistrial.
+	# The only spells we are counting are opening hand spells. Those are stored in the global spellsthistrial.
 	for card in spellsthistrial:
 		if caststhistrial[turn-1][card] == 0 and cardDatabase[card]['cmc'] <= (turn):
 			manaCost = ManaPool(cardDatabase[card]['manaCost'])
@@ -399,7 +415,7 @@ def checkCastable(lineofplay):
 				if caststhistrial[turn-1][card] == 1: break
 				if debug['CastSpell']: print('       trying to cast',card,'... comparing',pool,' to ', manaCost)
 				if pool == manaCost:
-					# If the mana is doable, let's make sure we don't have any other requirements:
+					# If the mana is doable, let's make sure we don't have any other requirements, like Chained to the Rocks:
 					if card == 'Chained to the Rocks':
 						if debug['CastSpell']: print('       mana is okay for '+card)
 						haveMountain = 0
@@ -429,9 +445,9 @@ def parseDecklist(deckfile):
 		if 'Sideboard' in line or 'sideboard' in line:
 			break
 
-		# Split one time, based on delimiters of space, the letter x, and tab -- that way we can parse '2x Flooded Strand' is ['2','Flooded Strand']
+		# Split one time, based on delimiters of space, the letter x, and tab -- that way we can parse '2x 			Flooded Strand' as ['2','Flooded Strand']
 		words = re.split(r'[ x\t]+',line,1)
-		# Okay, now the lines we want to parse look like '2x','Flooded Strand'
+		# Okay, now the lines we want to parse look like ['2','Flooded Strand']
 		if len(words) == 2:
 			if is_int(words[0]):
 				if debug['parseDecklist']: print('Parsed as',int(words[0]),'of card',words[1].strip())
@@ -443,6 +459,7 @@ def parseDecklist(deckfile):
 	inputfile.close()
 	for card in decklist:
 		if card not in cardDatabase:
+			# TODO: Make capitalization friendly so people don't get frustrated by the 'Hero Of Iroas'
 			print('Decklist error: card not found. Check capitalization?',card)
 			exit('Decklist error; sorry!! Fix the decklist and run program again.')
 
@@ -458,7 +475,8 @@ def parseDecklist(deckfile):
 		deck.extend([card]*decklist[card])
 
 def drawHand(handsize):
-	# Shuffle the deck.
+	# This function draws a hand of handsize cards.
+	# Shuffle the deck. TODO: Is random.sample good enough? I'm not sure actually.
 	currentdeck = random.sample(deck, len(deck))
 	# Create a new line of play based on this deck.
 	lineofplay = LineOfPlay([],[],currentdeck)
@@ -515,10 +533,15 @@ def displayResults():
 		print(percents[card])
 
 
+########################################################
+#
+# Starting here is what the program actually does.
+#
+########################################################
 
 
 # A decklist is a dictionary where the key is the card name and the value is the number of copies. This should make importing easy.
-# Now we have a decklistParse() function that takes a filename and tries to read it.
+# The decklist parser takes a filename and tries to read it.
 parseDecklist(deckfile)
 
 # We need to go through all the lands in our deck and figure out what is going on with them.
@@ -555,7 +578,7 @@ for trial in range(trials):
 	# Start by drawing a hand of 7.
 	lineofplay = drawHand(7)
 
-	# If we are considering mulligans, then we have to look at how many lands we have.
+	# If we are considering mulligans, then we have to look at how many lands we have. This is Karsten's basic mulligan strategy for simulators.
 	if mulligans:
 		if landsInHand(lineofplay) in [0,1,6,7]:
 			if debug['mulligans']: print('  Mulligan hand of 7 cards,',landsInHand(lineofplay),'lands:',lineofplay.hand)
@@ -601,7 +624,7 @@ for trial in range(trials):
 		for card in caststhistrial[i]:
 			casts[i][card] += caststhistrial[i][card]
 
-
+# For now, we just display the results at the end. TODO: Store them, so that if we run 5000 trials and then another 5000 trials, we can combine the data.
 displayResults()
 
 

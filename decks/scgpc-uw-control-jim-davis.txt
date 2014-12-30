@@ -1,0 +1,38 @@
+Creatures (1)
+
+1 Pearl Lake Ancient
+Planeswalkers (3)
+
+3 Elspeth, Sun's Champion
+Lands (27)
+
+5 Island
+2 Plains
+2 Evolving Wilds
+4 Flooded Strand
+2 Polluted Delta
+4 Radiant Fountain
+4 Temple of Enlightenment
+4 Tranquil Cove
+Spells (29)
+
+4 Banishing Light
+2 Devouring Light
+3 Dig Through Time
+3 Disdainful Stroke
+4 Dissolve
+3 Jace's Ingenuity
+2 Last Breath
+3 Nullify
+2 Divination
+3 End Hostilities
+Sideboard
+
+2 Omenspeaker
+2 Erase
+1 Fated Retribution
+1 Last Breath
+3 Negate
+3 Brimaz, King of Oreskos
+2 Glare of Heresy
+1 Whelming Wave

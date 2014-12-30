@@ -1,0 +1,40 @@
+Creatures (19)
+
+4 Battlewise Hoplite
+4 Favored Hoplite
+3 Heliod's Pilgrim
+4 Hero of Iroas
+3 Seeker of the Way
+1 Eidolon of Countless Battles
+Lands (22)
+
+2 Island
+9 Plains
+4 Flooded Strand
+1 Mana Confluence
+4 Temple of Enlightenment
+2 Tranquil Cove
+Spells (19)
+
+1 Aqueous Form
+1 Ordeal of Heliod
+4 Ordeal of Thassa
+2 Stratus Walk
+1 Ajani's Presence
+4 Defiant Strike
+1 Feat of Resistance
+4 Gods Willing
+1 Stubborn Denial
+Sideboard
+
+2 Lagonna-Band Trailblazer
+1 Aqueous Form
+1 Mortal Obstinacy
+1 Ordeal of Heliod
+1 Ajani's Presence
+1 Dig Through Time
+1 Erase
+3 Stubborn Denial
+1 Triton Tactics
+2 Glare of Heresy
+1 Treasure Cruise

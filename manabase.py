@@ -503,10 +503,11 @@ def displayResults():
 				percent = '{:>6.1%}'.format(percent)
 				percents[card] += ('  Cast on '+str(i+1)+': '+percent+'')
 
+				# This basic margin of error calculation is only valid if we have more than 30 trials and at least 5 successes and at least 5 failures.
 				if casts[i][card] >= 5 and (draws[card]-casts[i][card]) >= 5 and draws[card] >= 30:
 					error = 1.96*math.sqrt(casts[i][card]*(draws[card]-casts[i][card])/math.pow(draws[card],3))
 					error = '{:<6.1%}'.format(error)
-					percents[card]+= 'E:'+error
+					percents[card]+= '+-'+error
 				else:
 					percents[card]+= '        '
 					

@@ -43,7 +43,7 @@ json_data.close()
 
 # How many turns out are we going? How many trials? Are we on the play [False] or on the draw [True]?
 maxturns = 5
-trials = 1
+trials = 100000
 onthedraw = False
 
 # Mulligan 7-card hands with 0,1,6,7 lands,  ... 6-card hands with 0,1,5,6 lands, ... 5-card hands with 0,5 lands.
@@ -55,20 +55,20 @@ mulligans = True
 # deckfile = 'decks/scgpc-uw-heroic-tom-ross.txt'
 # deckfile = 'decks/scgpc-rg-aggro-logan-mize.txt'
 # deckfile = 'decks/scgpc-jeskai-tokens-ross-merriam.txt'
-# deckfile = 'decks/scgpc-temur-midrange-jeff-hoogland.txt'
+deckfile = 'decks/scgpc-temur-midrange-jeff-hoogland.txt'
 # deckfile = 'decks/scgpc-uw-control-jim-davis.txt'
-deckfile = 'decks/scgiq-gr-monsters-daniel-carten.txt'
+# deckfile = 'decks/scgiq-gr-monsters-daniel-carten.txt'
 
 debug = {}
 debug['Minimal'] = True
-debug['Trial'] = True
+debug['Trial'] = False
 debug['DrawCard'] = False
 debug['CastSpell'] = False
-debug['parseMana'] = True
+debug['parseMana'] = False
 debug['LinesOfPlay'] = False
 debug['CastsThisTrial'] = False
 debug['parseDecklist'] = False
-debug['manaAvailable'] = False
+debug['checkManaAvailability'] = False
 debug['mulligans'] = False
 
 class LineOfPlay:
@@ -98,7 +98,7 @@ class LineOfPlay:
 		# Plays is a list of lists. The length of this list is the turn we are on.
 		return len(self.plays)
 
-	def manaAvailable(self):
+	def manaSourcesAvailable(self):
 		# In a certain line of play, we want to know which combination of mana is available. New lands and summoning-sick guys aren't available.
 
 		# Make a list of available cards (so we dont count tapped lands on the turn they come out and don't count summoning-sick dudes.)
@@ -126,41 +126,8 @@ class LineOfPlay:
 						# Vanilla creatures are also summoning sick, so unavailable.
 						availablecards.remove(cardplayedthisturn)
 
-		# Now we have a list of manaproducers available to us, but we need to see what combinations of mana we can make.
-		# Luckily each manaproducer in the deck has already been parsed and has a list of mana (in ManaPool format) available. 
-		# For example the dictionary has manaDatabase['Island'] = [{U}] and manaDatabase['Temple of Malice'] = [{R}, {B}] and manaDatabase['Elvish Mystic'] = [{G}]
-		# So if your lands available are Island and Temple of Malice, your availablemana should be [{0}, {1}, {R}, {U}, {B}, {2}, {1}{R}, {1}{U}, {1}{B}, {U}{R}, {U}{B}]
-		availablemana = [ManaPool('{0}')]
-		for card in availablecards:
-			if debug['manaAvailable']: print('       Tapping for mana:',card)
-			newoptionswiththiscard = []
-			# If there is an urborg in play, we can tap for black mana.
-			for play in self.plays:
-				if 'Urborg, Tomb of Yawgmoth' in play:
-					for manaoption in availablemana:
-						# Each of the options we had before this card needs to get appended with one of these.
-						newoptionswiththiscard.append(manaoption + ManaPool('{B}'))
-
-			# We can then add on this card's mana symbols. Danger: the mana symbols might include things like 'Scry' or 'FetchU' which we should skip.
-			for manasymbol in manaDatabase[card]:
-				if manasymbol != 'scry':
-					for manaoption in availablemana:
-						# Each of the options we had before this card needs to get appended with one of these.
-						newoptionswiththiscard.append(manaoption + manasymbol)
-			# We can also just treat the new one as a colorless.
-			manasymbol = ManaPool('{1}')
-			for manaoption in availablemana:
-				# Each of the options we had before this card needs to get appended with one of these.
-				newoptionswiththiscard.append(manaoption + manasymbol)
-
-			# Okay, if the new option is actually new, append it.
-			for newoption in newoptionswiththiscard:
-				if newoption not in availablemana:
-					availablemana.append(newoption)
-
-			if debug['manaAvailable']: print('       Possible mana pools are now:',availablemana)
-
-		return availablemana
+		if debug['checkManaAvailability']: print('        Available mana sources in this line of play:',availablecards)
+		return availablecards
 
 def toposort(data):
 	"""Dependencies are expressed as a dictionary whose keys are items
@@ -318,6 +285,8 @@ def parseMana(decklist):
 		# The second list of symbols is strictly larger if everything in #2 is in #1, and something in #2 is not in #1.
 		return (all([symbol in symbolsInCard2 for symbol in symbolsInCard1]) and any([symbol not in symbolsInCard1 for symbol in symbolsInCard2]))
 
+	global manaSourcesBetterThan
+	global manaSourcesInOrder
 	manaSourcesBetterThan = {}
 	for card in manaDatabase:
 		# Just make a list of all the othercards that are better than card.
@@ -588,6 +557,65 @@ def castSpells(lineofplay):
 		if lineofplay.turn() < maxturns:
 			continuePlaying(lineofplay,True)
 
+def checkManaAvailability(symbolsToAcquire, manaSourcesAvailable):
+	if debug['checkManaAvailability']: print('         Trying to acquire',symbolsToAcquire,'with',manaSourcesAvailable)
+	
+	# TODO: Some things like Nykthos or Sol Ring might make more than one mana.
+	cmc = 0
+	for symbol in symbolsToAcquire:
+		if is_int(symbol): 
+			cmc += int(symbol)
+		else:
+			cmc += 1
+	if cmc > len(manaSourcesAvailable):
+		if debug['checkManaAvailability']: print('         Thats not possible with this few sources.')
+		return False
+
+
+	# We return true if there is only one symbol to acquire and we can do it.
+	if len(symbolsToAcquire) == 1:
+		lastsymbol = symbolsToAcquire[0]
+
+		# TODO: Some things like Nykthos or Sol Ring might make more than one mana.
+		if is_int(lastsymbol):
+			if int(lastsymbol) <= len(manaSourcesAvailable):
+				if debug['checkManaAvailability']: print('         Success! The last symbol was',lastsymbol,'and we had enough left.')
+				return True
+			else:
+				if debug['checkManaAvailability']: print('         Failure! The last symbol was',lastsymbol,'and we didnt have enough left.')
+				return False
+		elif any([(ManaPool('{'+lastsymbol+'}') in manaDatabase[card]) for card in manaSourcesAvailable]):
+			if debug['checkManaAvailability']: print('         Success! The last symbol was',lastsymbol,'and we found it.')
+			return True
+		else:
+			if debug['checkManaAvailability']: print('         Failure! The last symbol was',lastsymbol,'and we couldnt find it.')
+			return False
+	else:
+		nextSymbol = symbolsToAcquire[0]
+
+		manaSourcesTried = []
+		# We need to try a variety of mana sources to acquire this mana. We'll try in the order of the list manaSourcesInOrder.
+		for manaSource in manaSourcesInOrder:
+			if manaSource in manaSourcesAvailable:
+				# Okay! We will try this -- but here is the thing. We don't try it if it is better than something we already tried.
+				# This is the key optimization. If we tried using "Forest" for {G} and failed, then it is pointless to try using "Temple of Abandon" for the same {G}.
+				if not any([manaSource in manaSourcesBetterThan[manaSourceTried] for manaSourceTried in manaSourcesTried]):
+					if ManaPool('{'+nextSymbol+'}') in manaDatabase[manaSource]:
+						# It's possible to use this card to satisfy this symbol, so we'll try it.
+						manaSourcesTried.append(manaSource)
+						newsymbolsToAcquire = list(symbolsToAcquire)
+						symbolRemoved = newsymbolsToAcquire.pop(0)
+						newmanaSourcesAvailable = list(manaSourcesAvailable)
+						newmanaSourcesAvailable.remove(manaSource)
+						if debug['checkManaAvailability']: print('            With this try we have tried',manaSourcesTried,'for',nextSymbol,'- removing source',manaSource,'for',nextSymbol,': remaining sources',newmanaSourcesAvailable)
+						# The only way this ends is if we find a path through this tree that satisfies the final symbol. If so, we win!
+						if checkManaAvailability(newsymbolsToAcquire,newmanaSourcesAvailable): return True
+				else:
+					if debug['checkManaAvailability']: print('            So far we tried',manaSourcesTried,'for',nextSymbol,'- no point trying',manaSource,'for',nextSymbol)
+		# If we get here, then I guess we didn't make it.
+		if debug['checkManaAvailability']: print('         Failure! We couldnt get',symbolsToAcquire,'from',manaSourcesAvailable)		
+		return False
+
 def checkCastable(lineofplay):
 	# We will return the spells that we could have cast, in case castSpells needs to make more lines of play out of them.
 	spellsToCast = []
@@ -595,36 +623,66 @@ def checkCastable(lineofplay):
 	if debug['CastSpell']: print('     checkCastable on:',lineofplay)
 	turn = lineofplay.turn()
 
-	# This returns a sequence of ManaPool objects, the various mana pools we could make with this line of play.
-	manaAvailable = lineofplay.manaAvailable()
-	if debug['CastSpell']: print('       Mana options available:',manaAvailable)
+	# This tells us which cards are available to tap for mana.
+	manaSourcesAvailable = lineofplay.manaSourcesAvailable()
 
-	# The only spells we are counting are opening hand spells. Those are stored in the global spellsthistrial. But since we are using some spells for mana, we need to try casting everything.
-	for card in set(lineofplay.hand).union(spellsthistrial):
-		if not isLand(card):
-			manaCost = ManaPool(cardDatabase[card]['manaCost'])
-			if manaCost in manaAvailable:
-				if debug['CastSpell']: print('       Casting',card,'... found',manaCost,' in ', manaAvailable)
-				# If the mana is doable, let's make sure we don't have any other requirements, like Chained to the Rocks:
-				if card == 'Chained to the Rocks':
-					if debug['CastSpell']: print('       mana is okay for '+card)
-					haveMountain = 0
-					for play in lineofplay.plays:
-						for card2 in play:  # Technically an Elvish Mystic might be in here, but it's okay; I guess if we cast a Mountain somehow you could Chain to it.
-							if 'subtypes' in cardDatabase[card2]:
-								if 'Mountain' in cardDatabase[card2]['subtypes']:
-									if debug['CastSpell']: print('       successfully cast turn',turn,card)
-									# Okay, it's cool that the spell was castable, but if it isn't in our hand anymore, we don't want to return it.
-									if card in lineofplay.hand: spellsToCast.append(card)
-									# Again: only count spells that were in our opening hand.
-									if card in spellsthistrial: caststhistrial[turn-1][card] = 1
-				else:
-					# We aren't incrementing this; it is a flag 0 or 1.
-					if debug['CastSpell']: print('       successfully cast turn',turn,card)
-					# Okay, it's cool that the spell was castable, but if it isn't in our hand anymore, we don't want to return it.
-					if card in lineofplay.hand: spellsToCast.append(card)
-					# Again: only count spells that were in our opening hand.
-					if card in spellsthistrial: caststhistrial[turn-1][card] = 1
+	# The only spells we are counting are opening hand spells. Those are stored in the global spellsthistrial. But since we are using some spells for mana, we need to try casting everything in hand or in opening hand.
+	for card in set([spell for spell in lineofplay.hand if not isLand(spell)]).union(spellsthistrial):
+		if card not in caststhistrial[turn-1] and card not in manaDatabase:
+			# We don't need to care about non-manaproducing spells if they weren't in the opening hand.
+			# TODO: Courser or card draw spells do matter.
+			continue 
+		elif card in caststhistrial[turn-1] and card not in manaDatabase:
+			if caststhistrial[turn-1][card] == 1:
+				# We don't need to care about non-manaproducing spells if we already found a way to cast them earlier.
+				# TODO: Courser or card draw spells do matter.
+				continue
+
+		# Go to the card database to get the mana cost.
+		manaCost = cardDatabase[card]['manaCost']
+		# For now, X is always 0.
+		newManaCost = manaCost.replace('{X}','')
+		symbolsToAcquire = re.split(r'[{} ]+',newManaCost[1:-1])
+		# Acquire the colored symbols first, before the colorless.
+		symbolsToAcquire.reverse()
+
+		# If we accidentally killed the mana cost by removing X, make it zero.
+		if symbolsToAcquire == []:
+			symbolsToAcquire = ['{0}']
+
+		# This function recursively tries to acquire all these symbols given these mana sources.
+		if debug['checkManaAvailability']: print('         Starting the chain, trying to get',symbolsToAcquire,'from',manaSourcesAvailable)
+		isCastable = checkManaAvailability(symbolsToAcquire, manaSourcesAvailable)
+
+		if isCastable:
+			if debug['CastSpell']: print('       Successfully found a way to cast',card,'... we found',manaCost,'in', manaSourcesAvailable,'on turn',turn)
+			# If the mana is doable, let's make sure we don't have any other requirements, like Chained to the Rocks:
+			if card == 'Chained to the Rocks':
+				if debug['CastSpell']: print('       mana is okay for '+card)
+				haveMountain = 0
+				for play in lineofplay.plays:
+					for card2 in play:  # Technically an Elvish Mystic might be in here, but it's okay; I guess if we cast a Mountain somehow you could Chain to it.
+						if 'subtypes' in cardDatabase[card2]:
+							if 'Mountain' in cardDatabase[card2]['subtypes']:
+								if debug['CastSpell']: print('       We successfully cast turn',turn,card,'!')
+								# Okay, it's cool that the spell was castable, but if it isn't in our hand anymore, we don't want to return it.
+								if card in lineofplay.hand: spellsToCast.append(card)
+								# Again: only count spells that were in our opening hand.
+								if card in spellsthistrial: 
+									caststhistrial[turn-1][card] = 1
+									for i in range(turn,maxturns):
+										caststhistrial[i-1][card] = 1
+			else:
+				# We aren't incrementing this; it is a flag 0 or 1.
+				if debug['CastSpell']: print('       We successfully cast turn',turn,card,'!')
+				# Okay, it's cool that the spell was castable, but if it isn't in our hand anymore, we don't want to return it.
+				if card in lineofplay.hand: spellsToCast.append(card)
+				# Again: only count spells that were in our opening hand. 
+				if card in spellsthistrial: 
+					caststhistrial[turn-1][card] = 1
+					for i in range(turn,maxturns):
+						caststhistrial[i-1][card] = 1
+
 
 	# Okay, now comes the mathy part. Suppose you are trying to cast Savage Knuckleblade (cost: RUG) and you have the following lands:
 	# Sylvan Caryatid, Mana Confluence, Forest
@@ -726,7 +784,7 @@ def displayResults():
 			if draws[card] > 0:
 				percent = casts[i][card]/draws[card]
 				percent = '{:>6.1%}'.format(percent)
-				percents[card] += ('  Cast on '+str(i+1)+': '+percent+'')
+				percents[card] += ('  Cast by '+str(i+1)+': '+percent+'')
 
 				# This basic margin of error calculation is only valid if we have more than 30 trials and at least 5 successes and at least 5 failures.
 				if casts[i][card] >= 5 and (draws[card]-casts[i][card]) >= 5 and draws[card] >= 30:
@@ -802,7 +860,7 @@ for trial in range(trials):
 	# When we decide to keep a hand, keep track of how large the hand was that we kept.
 	handsize = len(lineofplay.hand)
 	handsizes[handsize] += 1
-	if debug['Trial']: print('Trial #',trial,'kept opening hand of',handsize,'cards:',lineofplay.hand)
+	if debug['Trial']: print('Trial #',trial,'kept opening hand of',handsize,'cards:',lineofplay.hand,'top few:',lineofplay.deck[:5])
 
 	# In this trial, we only care about how many times we cast the spells in the opening hand.
 	# spellsthistrial is the list of spells we care about.

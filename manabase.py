@@ -32,6 +32,9 @@ from sys import exit
 # We will need to import datetime to time our trials.
 from datetime import datetime
 
+# Our topological sorting algorithm uses this.
+from functools import reduce
+
 # Get the most updated AllCards.json from mtgjson.com. Then we use it here.
 import json
 json_data=open('AllCards.json')
@@ -40,7 +43,7 @@ json_data.close()
 
 # How many turns out are we going? How many trials? Are we on the play [False] or on the draw [True]?
 maxturns = 5
-trials = 5000
+trials = 1
 onthedraw = False
 
 # Mulligan 7-card hands with 0,1,6,7 lands,  ... 6-card hands with 0,1,5,6 lands, ... 5-card hands with 0,5 lands.
@@ -51,17 +54,17 @@ mulligans = True
 # deckfile = 'decks/scgpc-abzan-aggro-BBD.txt'
 # deckfile = 'decks/scgpc-uw-heroic-tom-ross.txt'
 # deckfile = 'decks/scgpc-rg-aggro-logan-mize.txt'
-deckfile = 'decks/scgpc-jeskai-tokens-ross-merriam.txt'
+# deckfile = 'decks/scgpc-jeskai-tokens-ross-merriam.txt'
 # deckfile = 'decks/scgpc-temur-midrange-jeff-hoogland.txt'
 # deckfile = 'decks/scgpc-uw-control-jim-davis.txt'
-# deckfile = 'decks/scgiq-gr-monsters-daniel-carten.txt'
+deckfile = 'decks/scgiq-gr-monsters-daniel-carten.txt'
 
 debug = {}
 debug['Minimal'] = True
 debug['Trial'] = True
 debug['DrawCard'] = False
 debug['CastSpell'] = False
-debug['parseMana'] = False
+debug['parseMana'] = True
 debug['LinesOfPlay'] = False
 debug['CastsThisTrial'] = False
 debug['parseDecklist'] = False
@@ -159,6 +162,49 @@ class LineOfPlay:
 
 		return availablemana
 
+def toposort(data):
+	"""Dependencies are expressed as a dictionary whose keys are items
+	and whose values are a set of dependent items. Output is a list of
+	sets in topological order. The first set consists of items with no
+	dependences, each subsequent set consists of items that depend upon
+	items in the preceeding sets.
+
+	>>> print '\\n'.join(repr(sorted(x)) for x in toposort({
+	...     2: set([11]),
+	...     9: set([11,8]),
+	...     10: set([11,3]),
+	...     11: set([7,5]),
+	...     8: set([7,3]),
+	...     }) )
+	[3, 5, 7]
+	[8, 11]
+	[2, 9, 10]
+
+	"""
+	# This recipe was taken from http://code.activestate.com/recipes/578272-topological-sort/ on December 31, 2014.
+
+	# Ignore self dependencies.
+	for k, v in data.items():
+	    v.discard(k)
+	# Find all items that don't depend on anything.
+	extra_items_in_deps = reduce(set.union, data.values()) - set(data.keys())
+	# Add empty dependences where needed
+	data.update({item:set() for item in extra_items_in_deps})
+	while True:
+		# ordered is the set of items that do not have any dependencies.
+	    ordered = set(item for item, dep in data.items() if not dep)
+	    # if we don't have any, then we are done.
+	    if not ordered:
+	        break
+	    # okay, return this set of items with no dependencies.
+	    yield ordered
+	    # then remove the set of items with no dependencies from the dictionary entirely.
+	    data = {item: (dep - ordered)
+	            for item, dep in data.items()
+	                if item not in ordered}
+	# if it loops around and everything gets destroyed, then we have a cyclic dependency.
+	assert not data, "Cyclic dependencies exist among these items:\n%s" % '\n'.join(repr(x) for x in data.items())
+
 def parseMana(decklist):
 	# This function should take a decklist and go through all the manaproducers creating a small database.
 	# For example, a Jeskai decklist might end up with the following manaDatabase:
@@ -199,6 +245,9 @@ def parseMana(decklist):
 						# After we get to the tap symbol, it's time to start adding to the list.
 						if currentsymbol == '{T':
 							flagAfterTapSymbol = True
+						elif currentsymbol == '{1':
+							# Every land is currently assumed to tap for {1}, so skip it
+							pass
 						elif flagAfterTapSymbol:
 							manaDatabase[card].append(ManaPool(currentsymbol+char))
 					elif char == '.':
@@ -258,8 +307,36 @@ def parseMana(decklist):
 								manaDatabase[card].append(ManaPool(symbol))
 					if debug['parseMana']: print('Parsed as ',manaDatabase[card])
 
+
+	# At the end of this, we will build a partial ordering of all the mana producers in the deck. This will allow us to choose mana sources intelligently in the future.
+
+	def secondManaSourceIsBetter(card1,card2):
+		coloredManaSymbols = ['{W}','{U}','{B}','{R}','{G}']
+		# the second mana source is better if its set of colored mana symbols is strictly larger.
+		symbolsInCard1 = [symbol for symbol in coloredManaSymbols if (ManaPool(symbol) in manaDatabase[card1])]
+		symbolsInCard2 = [symbol for symbol in coloredManaSymbols if (ManaPool(symbol) in manaDatabase[card2])]
+		# The second list of symbols is strictly larger if everything in #2 is in #1, and something in #2 is not in #1.
+		return (all([symbol in symbolsInCard2 for symbol in symbolsInCard1]) and any([symbol not in symbolsInCard1 for symbol in symbolsInCard2]))
+
+	manaSourcesBetterThan = {}
+	for card in manaDatabase:
+		# Just make a list of all the othercards that are better than card.
+		manaSourcesBetterThan[card] = set([othercard for othercard in manaDatabase if secondManaSourceIsBetter(card,othercard)])
+
 	if debug['parseMana']: print('End of Mana Parser. Results below:')
-	if debug['parseMana']: print(manaDatabase)
+	if debug['parseMana']: print('     Mana Database:',manaDatabase)
+	if debug['parseMana']: print('Mana Partial Order:',manaSourcesBetterThan)
+
+	# Then we can create a topological sort of the mana sources. This is an order to try the lands in.
+	toposorted = toposort(manaSourcesBetterThan)
+	# toposorted is a list of sets. We want to concatenate them into a list, and we don't care about the order inside the sets.
+	manaSourcesInOrder = []
+	for cohortofcards in toposorted:
+		for card in cohortofcards:
+			manaSourcesInOrder.append(card)
+	manaSourcesInOrder.reverse()
+
+	if debug['parseMana']: print('Order to try Lands:',manaSourcesInOrder)
 	if debug['parseMana']: print('')
 
 class ManaPool:
@@ -548,6 +625,16 @@ def checkCastable(lineofplay):
 					if card in lineofplay.hand: spellsToCast.append(card)
 					# Again: only count spells that were in our opening hand.
 					if card in spellsthistrial: caststhistrial[turn-1][card] = 1
+
+	# Okay, now comes the mathy part. Suppose you are trying to cast Savage Knuckleblade (cost: RUG) and you have the following lands:
+	# Sylvan Caryatid, Mana Confluence, Forest
+	# The way a human handles this issue is they say "aha -- the Forest is only useful for Green, so I better tap the Forest for green and the others for something else."
+	# The key optimization idea here is that if we need a green mana, we try using Forest for it, and we can't cast the spell, then there is no use trying to use Mana Confluence for the green.
+	# We will use what is called a "topological sort" of the lands to stratify things this way. For example, in a deck with lots of weird lands, you might have:
+	# Forest, Yavimaya Coast, Frontier Bivouac, Sandsteppe Citadel, Sylvan Caryatid.
+	# With respect to green, these can be topologically sorted as follows: [Forest], [Yavimaya Coast, Sandsteppe Citadel], [Frontier Bivouac], [Sylvan Caryatid].
+	# This means that if you have a land from one of the lists, you tried tapping it for green and everything still failed, then there is no use trying anything from a later list.
+
 	return spellsToCast
 
 def parseDecklist(deckfile):

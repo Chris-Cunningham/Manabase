@@ -1,0 +1,41 @@
+Creatures (15)
+
+1 Aven Mindcensor
+3 Restoration Angel
+4 Snapcaster Mage
+1 Stormbreath Dragon
+4 Geist of Saint Traft
+2 Vendilion Clique
+Lands (24)
+
+2 Island
+1 Mountain
+1 Plains
+3 Arid Mesa
+4 Celestial Colonnade
+3 Flooded Strand
+1 Hallowed Fountain
+2 Sacred Foundry
+3 Scalding Tarn
+2 Steam Vents
+1 Sulfur Falls
+1 Eiganjo Castle
+Spells (21)
+
+2 Dig Through Time
+3 Electrolyze
+4 Lightning Bolt
+4 Lightning Helix
+4 Path to Exile
+4 Remand
+Sideboard
+
+1 Batterskull
+2 Engineered Explosives
+1 Aven Mindcensor
+3 Kor Firewalker
+2 Counterflux
+1 Hibernation
+2 Magma Spray
+1 Negate
+2 Wear

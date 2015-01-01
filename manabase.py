@@ -55,9 +55,11 @@ mulligans = True
 # deckfile = 'decks/scgpc-uw-heroic-tom-ross.txt'
 # deckfile = 'decks/scgpc-rg-aggro-logan-mize.txt'
 # deckfile = 'decks/scgpc-jeskai-tokens-ross-merriam.txt'
-deckfile = 'decks/scgpc-temur-midrange-jeff-hoogland.txt'
+# deckfile = 'decks/scgpc-temur-midrange-jeff-hoogland.txt'
 # deckfile = 'decks/scgpc-uw-control-jim-davis.txt'
 # deckfile = 'decks/scgiq-gr-monsters-daniel-carten.txt'
+# deckfile = 'decks/scgiq-jeskai-flash-modern-scgiq.txt'
+deckfile = 'decks/scgiq-ub-control.txt'
 
 debug = {}
 debug['Minimal'] = True
@@ -112,9 +114,9 @@ class LineOfPlay:
 		# For the one(s) we just played, check whether it is a tapland or a summoning sick creature.
 		if self.turn() > 0:
 			for cardplayedthisturn in self.plays[self.turn()-1]:
-				# The only way a land is not available is if the land has text that contains the word 'tapped'
+				# The only way a land is not available is if the land has text that contains the word 'tapped' but it is not a shockland.
 				if isLand(cardplayedthisturn) and 'text' in cardDatabase[cardplayedthisturn]:
-					if 'tapped' in cardDatabase[cardplayedthisturn]['text']:
+					if 'tapped' in cardDatabase[cardplayedthisturn]['text'] and 'you may pay 2 life' not in cardDatabase[cardplayedthisturn]['text']:
 						availablecards.remove(cardplayedthisturn)
 				# A creature is unusable if it entered play this turn as well. TODO: Dryad Arbor, I guess, ugh why
 				if isCreature(cardplayedthisturn):
@@ -233,7 +235,6 @@ def parseMana(decklist):
 					manaDatabase[card].append(ManaPool('{R}'))
 					manaDatabase[card].append(ManaPool('{B}'))
 					manaDatabase[card].append(ManaPool('{G}'))
-				# This fetchland catcher is also going to cause some false positives, like Evolving Wilds TODO
 				if 'Search your library' in  cardDatabase[card]['text']:
 					if 'Plains' in cardDatabase[card]['text']:
 						manaDatabase[card].append('FetchW')
@@ -245,6 +246,8 @@ def parseMana(decklist):
 						manaDatabase[card].append('FetchU')
 					if 'Forest' in cardDatabase[card]['text']:
 						manaDatabase[card].append('FetchG')
+					if 'basic land card' in cardDatabase[card]['text']:
+						manaDatabase[card].append('FetchBasic')
 			if debug['parseMana']: print('Parsed as ',manaDatabase[card])
 		elif card not in manaDatabase:
 			# Okay, we're going to try to find all the mana dorks or manarocks.
@@ -274,6 +277,15 @@ def parseMana(decklist):
 								manaDatabase[card].append(ManaPool(symbol))
 					if debug['parseMana']: print('Parsed as ',manaDatabase[card])
 
+
+	# Okay, now comes the mathy part. Suppose you are trying to cast Savage Knuckleblade (cost: RUG) and you have the following lands:
+	# Sylvan Caryatid, Mana Confluence, Forest
+	# The way a human handles this issue is they say "aha -- the Forest is only useful for Green, so I better tap the Forest for green and the others for something else."
+	# The key optimization idea here is that if we need a green mana, we try using Forest for it, and we can't cast the spell, then there is no use trying to use Mana Confluence for the green.
+	# We will use what is called a "topological sort" of the lands to stratify things this way. For example, in a deck with lots of weird lands, you might have:
+	# Forest, Yavimaya Coast, Frontier Bivouac, Sandsteppe Citadel, Sylvan Caryatid.
+	# With respect to green, these can be topologically sorted as follows: [Forest], [Yavimaya Coast, Sandsteppe Citadel], [Frontier Bivouac], [Sylvan Caryatid].
+	# This means that if you have a land from one of the lists, you tried tapping it for green and everything still failed, then there is no use trying anything from a later list.
 
 	# At the end of this, we will build a partial ordering of all the mana producers in the deck. This will allow us to choose mana sources intelligently in the future.
 
@@ -470,35 +482,54 @@ def continuePlaying(lineofplay,drawacard):
 	if 0 in caststhistrial[lineofplay.turn()+1-1].values() and landstotry != []:
 
 		for card in set(landstotry):
-			# If it is a fetchland, we'll want to make two lines of play for the two fetch options. TODO: Pay 1 life TODO: Evolving Wilds/Terramorphic Expanse
-			if 'FetchU' in manaDatabase[card] or 'FetchW' in manaDatabase[card] or 'FetchB' in manaDatabase[card] or 'FetchG' in manaDatabase[card] or 'FetchR' in manaDatabase[card]:
+			# If it is a fetchland, we'll want to make two lines of play for the two fetch options. TODO: Pay 1 life 
+			if 'FetchU' in manaDatabase[card] or 'FetchW' in manaDatabase[card] or 'FetchB' in manaDatabase[card] or 'FetchG' in manaDatabase[card] or 'FetchR' in manaDatabase[card] or 'FetchBasic' in manaDatabase[card]:
+				# Figure out what our fetch options are.
+				fetchoptions = []
 				for fetchOption in manaDatabase[card]:
 					if fetchOption == 'FetchU':
-						fetch = 'Island'
+						fetchoptions.append(('subtypes','Island'))
 					elif fetchOption == 'FetchW':
-						fetch = 'Plains'
+						fetchoptions.append(('subtypes','Plains'))
 					elif fetchOption == 'FetchB':
-						fetch = 'Swamp'
+						fetchoptions.append(('subtypes','Swamp'))
 					elif fetchOption == 'FetchG':
-						fetch = 'Forest'
+						fetchoptions.append(('subtypes','Forest'))
 					elif fetchOption == 'FetchR':
-						fetch = 'Mountain'
+						fetchoptions.append(('subtypes','Mountain'))
+					elif fetchOption == 'FetchBasic':
+						fetchoptions.append(('supertypes','Basic'))
 					else:
 						continue
+
+				# Here we have something like [('subtypes','Forest'),('subtypes','Mountain')]. If our deck has four distinct cards with subtype forest or mountain, go get them all.
+				# Make a dictionary of all the valid targets. The key will be the card title, and the value will be the index of the LAST occurrence of the card in the deck.
+				# Grabbing the last occurrence of the card is a good plan because otherwise fetching the top card of your deck in a "try all lines of play" situation makes every fetchland be like a courser fetchland.
+				fetchtargets = {}
+				for fetch in fetchoptions:
+					for i,target in enumerate(lineofplay.deck):
+						if fetch[0] in cardDatabase[target]:
+							if fetch[1] in cardDatabase[target][fetch[0]]:
+								fetchtargets[target] = i
+
+				if debug['LinesOfPlay']: print('       Fetchland',card,'processed; possible fetch targets are',fetchtargets)
+
+				for target in fetchtargets:
 					newlineofplay = deepcopy(lineofplay)
 					# Remove our card from the hand and away entirely (we don't have a graveyard).
 					newlineofplay.hand.remove(card)
-					if fetch in newlineofplay.deck:
-						# TODO: We don't need to get the last Mountain if we are fetching a mountain. There might be lots of different cards with subtype Mountain to go for!
-						# We maybe should grab the last instance of the given land to avoid messing up the next cards in the deck too much. But python doesn't have rindex, and this isn't worth it.
-						i = newlineofplay.deck.index(fetch)
-						# Pop the appropriate card from the deck and into play.
-						newlineofplay.plays.append([newlineofplay.deck.pop(i)])	
-						# Shuffle the deck. Wait! No. If we shuffle the deck, we create a prescience problem where playing a fetch doubles your chances of a good topdeck. Without shuffling, we do the scry/fetch interaction wrong, but that is a much smaller error.
-						# newlineofplay.deck = random.sample(newlineofplay.deck, len(newlineofplay.deck))
+					# Pop the appropriate card from the deck and into play.
+					i = fetchtargets[target]
+					newlineofplay.plays.append([newlineofplay.deck.pop(i)])	
+					# Shuffle the deck. Wait! No. If we shuffle the deck, we create a prescience problem where playing a fetch doubles your chances of a good topdeck. Without shuffling, we do the scry/fetch interaction wrong, but that is a much smaller error.
+					# newlineofplay.deck = random.sample(newlineofplay.deck, len(newlineofplay.deck))
 
-						# Check if anything is castable and cast it -- this increments caststhisturn and makes new lines of play for spells we know how to handle, then continues playing.
-						castSpells(newlineofplay)	
+					# Check if anything is castable and cast it -- this increments caststhisturn and makes new lines of play for spells we know how to handle, then continues playing.
+					# One thing: we need to tell castSpells that it should not use the Evolving Wilds lands this turn.
+					if 'FetchBasic' in manaDatabase[card]:
+						castSpells(newlineofplay, False)
+					else:
+						castSpells(newlineofplay, True)	
 			else:
 				# Playing a non-fetchland is much easier.
 				newlineofplay = deepcopy(lineofplay)
@@ -506,7 +537,7 @@ def continuePlaying(lineofplay,drawacard):
 				i = newlineofplay.hand.index(card)
 				newlineofplay.plays.append([newlineofplay.hand.pop(i)])
 				# Check if anything is castable and cast it -- this increments caststhisturn and makes new lines of play for spells we know how to handle.
-				castSpells(newlineofplay)
+				castSpells(newlineofplay, True)
 
 				# If we just played a scryland, then we need to scry to the bottom and cast spells. We only care about this if there are turns left.
 				# Here, a land for turn has already been played, so if turn() is 4 and maxturns is 4, we actually don't want to play another turn.
@@ -517,7 +548,7 @@ def continuePlaying(lineofplay,drawacard):
 						# We don't need to do another castable check here; nothing is new.
 						# However, we should definitely bottom the top card before continuing.
 						newlineofplay2.deck = newlineofplay.deck[1:] + newlineofplay.deck[:1]
-						castSpells(newlineofplay2)
+						castSpells(newlineofplay2, True)
 
 	else:
 		# All the spells were already cast, so just keep going on to later turns by not playing a land here.
@@ -527,15 +558,15 @@ def continuePlaying(lineofplay,drawacard):
 		# Also remember to continue this line of play (where you didn't play a land this turn).
 		lineofplay.plays.append([])
 		# Check if anything is castable and cast it -- this increments caststhisturn and makes new lines of play for spells we know how to handle, then continues playing.
-		castSpells(lineofplay)
+		castSpells(lineofplay, True)
 
-def castSpells(lineofplay):
+def castSpells(lineofplay, useThisTurnsLands):
 	# This function is called when we have a line of play where the current turn has its land played, but the "Casts" have not been updated.
 
 	if debug['LinesOfPlay']: print('   ',lineofplay)
 	if debug['CastsThisTrial']: print('  Casts this trial:',caststhistrial)
 
-	spellsToCast = checkCastable(lineofplay)
+	spellsToCast = checkCastable(lineofplay, useThisTurnsLands)
 	weCouldNotCastAnything = True
 
 	# We don't actually want to cast very many spells. For now, the only ones we care about are mana producers.
@@ -616,7 +647,7 @@ def checkManaAvailability(symbolsToAcquire, manaSourcesAvailable):
 		if debug['checkManaAvailability']: print('         Failure! We couldnt get',symbolsToAcquire,'from',manaSourcesAvailable)		
 		return False
 
-def checkCastable(lineofplay):
+def checkCastable(lineofplay, useThisTurnsLands):
 	# We will return the spells that we could have cast, in case castSpells needs to make more lines of play out of them.
 	spellsToCast = []
 
@@ -625,6 +656,9 @@ def checkCastable(lineofplay):
 
 	# This tells us which cards are available to tap for mana.
 	manaSourcesAvailable = lineofplay.manaSourcesAvailable()
+	if not useThisTurnsLands:
+		for thisturnsland in [land for land in lineofplay.plays[turn-1] if isLand(land)]:
+			manaSourcesAvailable.remove(thisturnsland)
 
 	# The only spells we are counting are opening hand spells. Those are stored in the global spellsthistrial. But since we are using some spells for mana, we need to try casting everything in hand or in opening hand.
 	for card in set([spell for spell in lineofplay.hand if not isLand(spell)]).union(spellsthistrial):
@@ -682,16 +716,6 @@ def checkCastable(lineofplay):
 					caststhistrial[turn-1][card] = 1
 					for i in range(turn,maxturns):
 						caststhistrial[i-1][card] = 1
-
-
-	# Okay, now comes the mathy part. Suppose you are trying to cast Savage Knuckleblade (cost: RUG) and you have the following lands:
-	# Sylvan Caryatid, Mana Confluence, Forest
-	# The way a human handles this issue is they say "aha -- the Forest is only useful for Green, so I better tap the Forest for green and the others for something else."
-	# The key optimization idea here is that if we need a green mana, we try using Forest for it, and we can't cast the spell, then there is no use trying to use Mana Confluence for the green.
-	# We will use what is called a "topological sort" of the lands to stratify things this way. For example, in a deck with lots of weird lands, you might have:
-	# Forest, Yavimaya Coast, Frontier Bivouac, Sandsteppe Citadel, Sylvan Caryatid.
-	# With respect to green, these can be topologically sorted as follows: [Forest], [Yavimaya Coast, Sandsteppe Citadel], [Frontier Bivouac], [Sylvan Caryatid].
-	# This means that if you have a land from one of the lists, you tried tapping it for green and everything still failed, then there is no use trying anything from a later list.
 
 	return spellsToCast
 

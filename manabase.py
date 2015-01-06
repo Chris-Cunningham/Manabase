@@ -26,6 +26,10 @@ import math
 # We will use re.split in the deck parser.
 import re
 
+# We will work with files and directories, so we need to use os.path() and shutil.copyfile()
+import os
+import shutil
+
 # When we want to exit, we want to just use exit()
 from sys import exit
 
@@ -43,23 +47,12 @@ json_data.close()
 
 # How many turns out are we going? How many trials? Are we on the play [False] or on the draw [True]?
 maxturns = 5
-trials = 100000
+trials = 250000
 onthedraw = False
 
 # Mulligan 7-card hands with 0,1,6,7 lands,  ... 6-card hands with 0,1,5,6 lands, ... 5-card hands with 0,5 lands.
 # With 24 lands, we should end up with 7 lands: 84.4%      6 lands: 11.7%      5 lands: 3.4%      4 lands: 0.5%
 mulligans = True
-
-# deckfile = 'decks/scgpc-mardu-midrange-kent-ketter.txt'
-# deckfile = 'decks/scgpc-abzan-aggro-BBD.txt'
-# deckfile = 'decks/scgpc-uw-heroic-tom-ross.txt'
-# deckfile = 'decks/scgpc-rg-aggro-logan-mize.txt'
-# deckfile = 'decks/scgpc-jeskai-tokens-ross-merriam.txt'
-# deckfile = 'decks/scgpc-temur-midrange-jeff-hoogland.txt'
-# deckfile = 'decks/scgpc-uw-control-jim-davis.txt'
-# deckfile = 'decks/scgiq-gr-monsters-daniel-carten.txt'
-# deckfile = 'decks/scgiq-jeskai-flash-modern-scgiq.txt'
-deckfile = 'decks/scgiq-ub-control.txt'
 
 debug = {}
 debug['Minimal'] = True
@@ -72,6 +65,7 @@ debug['CastsThisTrial'] = False
 debug['parseDecklist'] = False
 debug['checkManaAvailability'] = False
 debug['mulligans'] = False
+debug['storeResults'] = False
 
 class LineOfPlay:
 	# A line of play is a dictionary that keeps track of a sequence of plays. For example,
@@ -452,7 +446,7 @@ def is_int(s):
     except ValueError:
         return False
 
-def landsInHand(lineofplay):
+def landCountInHand(lineofplay):
 	hand = lineofplay.hand
 	landsinhand = 0
 	for card in hand:
@@ -720,8 +714,7 @@ def checkCastable(lineofplay, useThisTurnsLands):
 	return spellsToCast
 
 def parseDecklist(deckfile):
-	global decklist
-	global deck
+	# This will return a tuple of deck, decklist
 
 	decklist = {}
 
@@ -763,6 +756,8 @@ def parseDecklist(deckfile):
 	for card in decklist:
 		deck.extend([card]*decklist[card])
 
+	return deck, decklist
+
 def drawHand(handsize):
 	# This function draws a hand of handsize cards.
 	# Shuffle the deck. TODO: Is random.sample good enough? I'm not sure actually.
@@ -776,8 +771,184 @@ def drawHand(handsize):
 
 	return lineofplay
 
-def displayResults():
+def playHand(lineofplay):
+	# In this trial, we only care about how many times we cast the spells in the opening hand.
+	# spellsthistrial is the list of spells we care about.
+	# caststhistrial[0] is a dictionary with keys: spells in this opening hand, values:0 or 1, whether we cast it or not on Turn 1.
+	# caststhistrial[1] is a dictionary with keys: spells in this opening hand, values:0 or 1, whether we cast it or not on Turn 2.
+	# etc, up to maxturns.
+	global spellsthistrial
+	global caststhistrial
+	spellsthistrial = []
+	caststhistrial = []
+	for i in range(maxturns):
+		caststhistrial.append({})
+	# If we have two copies of a spell in the opening hand, we don't need to check it twice as often, so use set.
+	for card in set(lineofplay.hand):
+		if not isLand(card):
+			# Optimization: If our deck contains no ramp, we can ignore spells that are too expensive to ever cast.
+			# If we are never going to play enough turns to cast this spell, just act like you never even drew it, to save time.
+			rampIsPossible = 0
+			for manaproducer in manaDatabase:
+				if not isLand(manaproducer): rampIsPossible = 1
+			if rampIsPossible or cardDatabase[card]['cmc'] <= maxturns:
+				draws[card] += 1
+				spellsthistrial.append(card)
+				for i in range(maxturns):
+					caststhistrial[i][card] = 0
+
+	# Continue playing. During "continue playing," we check whether cards are playable and set caststhistrial to 1 when possible.
+	# If we are on the draw, we tell continuePlaying to start the turn by drawing a card, otherwise not.
+	continuePlaying(lineofplay,onthedraw)
+
+	# After we've played through lots of lines of play, we have some 1s and 0s in caststhistrial.
+	# We add that to casts.
+	for i in range(maxturns):
+		for card in caststhistrial[i]:
+			casts[i][card] += caststhistrial[i][card]
+
+def storeResults():
 	# Okay. draws is a dictionary with keys: spell names and with values: the number of times we drew this spell.
+	# casts[0] is a dictionary; its keys are card names and its values are the number of times we cast this card in Turn 1.
+	# casts[1] is a dictionary; its keys are card names and its values are the number of times we cast this card by Turn 2.
+	# etc. up to maxturns.
+	# handsizes is a dictionary; its keys are the numbers 4 through 7, and the values are the number of times we kept hands of that size.
+	# onthedraw is a boolean that tells us play or draw.
+
+	# The results would be stored in deckfile minus extension plus '-results.txt'
+	resultsfile = 'results/'+deckname+'-results.txt'
+	cacheddeckfile = 'results/'+deckname+'-cached.txt'
+
+	if debug['storeResults']: print('Storing results in files',resultsfile,'and',cacheddeckfile)
+
+	# However, in the stored file, we need a different number of draws for each turn, in case you run data out to 5 turns once, then out to 7 turns later.
+	# So, draws is a list of dictionaries like casts, described above.
+	olddraws = []
+	oldcasts = []
+
+	global totaldraws
+	global totalcasts
+
+	# First we need to check if we have any stored results for this deck.
+	if os.path.isfile(resultsfile):
+		if debug['storeResults']: print('The results file already exists.')
+
+		# If so, we need to make sure it's the same deck that we have stored results for.
+		cacheddeck,cacheddecklist = parseDecklist(cacheddeckfile)
+		if cacheddecklist != decklist:
+			if debug['storeResults']: print('It looks like the stored results are for a different deck that used the same filename.')
+			# If the deck changed, rename the old results so we don't lose them.
+			# We want to rename the old results from something-results.txt to something-backup-1-results.txt
+			backupnumber = 0
+			while True:
+				backupnumber += 1
+				backupresultsfile = 'results/'+deckfile[:-4]+'-backup-'+backupnumber+'-results.txt'
+				backupcacheddeckfile = 'results/'+deckfile[:-4]+'-backup-'+backupnumber+'-cached.txt'
+				if debug['storeResults']: print('Storing old results in files',backupresultsfile,'and',backupcacheddeckfile)
+				if not os.path.isfile(backupresultsfile):
+					os.rename(resultsfile,backupresultsfile)
+					os.rename(cacheddeckfile,backupcacheddeckfile)
+					break
+		# In this case, we can open the old results and store them.
+		results = open(resultsfile)
+		for result in results:
+			# Each line in this file is a card name, then a series of proportions -- tab delimited.
+			# For example, Elvish Mystic	4/10 	6/10 	9/10 	10/10
+
+			if debug['storeResults']: print('Trying to parse the results line',result.strip())
+
+			# Start by splitting on tabs.
+			resultsequence = result.split('\t')
+
+			# We want a blank dictionary to fill in.
+			oldmaxturns = len(resultsequence) - 1
+			for i in range(oldmaxturns):
+				olddraws.append({})
+				oldcasts.append({})
+
+			# Get the card name out of the list first.
+			card = resultsequence.pop(0)
+
+			if debug['storeResults']: print('   Figured out it is a result of card "',card,'"')
+
+			# Okay, now populate the right numbers.
+			for (turn,fraction) in enumerate(resultsequence):
+				numbers = fraction.split('/')
+
+				oldcasts[turn][card] = int(numbers[0].strip())
+				olddraws[turn][card] = int(numbers[1].strip())
+				if debug['storeResults']: print('   The old data on',card,'on turn',turn+1,'was',oldcasts[turn][card],'out of',olddraws[turn][card])
+
+		results.close()
+
+		# Now that the old numbers are in place, make a new place to hold the new totals.
+		totaldraws = []
+		totalcasts = []
+		for turn in range(max(maxturns, oldmaxturns)):
+			totaldraws.append({})
+			totalcasts.append({})
+			if len(casts) > turn and len(oldcasts) > turn:
+				# This is the case where this turn is valid for both old and new.
+				
+				# We will start by going through all the cards inthe olddraws.
+				for card in olddraws[turn]:
+					if card in casts[turn]:
+						# This is the case where this turn is valid for both old and new and the card was drawn both times.
+						if debug['storeResults']: print('   Both old and new data available for',card,'for turn',turn+1,'... adding the numbers.')
+						totaldraws[turn][card] = olddraws[turn][card] + draws[card]
+						totalcasts[turn][card] = oldcasts[turn][card] + casts[turn][card]
+
+					else:
+						# This is the case where this turn is valid for both old and new and the card was drawn in old, but not new.
+						if debug['storeResults']: print('   Old data available for',card,'but not new data for turn',turn+1)
+						totaldraws[turn][card] = olddraws[turn][card]
+						totalcasts[turn][card] = oldcasts[turn][card]
+				
+				# Now pick up anything in draws that is not in olddraws.
+				for card in draws:
+					if card not in olddraws[turn]:
+						# This is the case where this turn is valid for both old and new and the card was drawn in new, but not old.
+						if debug['storeResults']: print('   New data available for',card,'but not old data for turn',turn+1)
+						totaldraws[turn][card] = draws[card]
+						totalcasts[turn][card] = casts[turn][card]
+
+			elif len(casts) > turn and len(oldcasts) <= turn:
+				# This is the case where this turn is valid for new but not old.
+				for card in casts[turn]:
+					if debug['storeResults']: print('   New data available for',card,'but not old data for turn',turn+1)
+					totaldraws[turn][card] = draws[card]
+					totalcasts[turn][card] = casts[turn][card]
+
+			elif len(casts) <= turn and len(oldcasts) > turn:
+				# This is the case where this turn is valid for old but not new.
+				for card in oldcasts[turn]:
+					if debug['storeResults']: print('   Old data available for',card,'but not new data for turn',turn+1)
+					totaldraws[turn][card] = olddraws[turn][card]
+					totalcasts[turn][card] = oldcasts[turn][card]
+
+	else:
+		# In this case, we will need to make a blank cached deckfile.
+		shutil.copy2(deckfile,cacheddeckfile)
+
+		# Then use our current numbers (in globals draws and casts).
+		totaldraws = []
+		for i in range(maxturns):
+			totaldraws.append(draws)
+		totalcasts = casts
+
+	# Output the new data to the file.
+	with open(resultsfile,'w') as f:
+		for card in totaldraws[0]:
+			stringtosave = card
+			for turn in range(len(totaldraws)):
+				stringtosave += '\t'
+				stringtosave += str(totalcasts[turn][card])
+				stringtosave += '/'
+				stringtosave += str(totaldraws[turn][card])
+			stringtosave += '\n'
+			f.write(stringtosave)
+
+def displayResults():
 	# casts[0] is a dictionary; its keys are card names and its values are the number of times we cast this card in Turn 1.
 	# casts[1] is a dictionary; its keys are card names and its values are the number of times we cast this card by Turn 2.
 	# etc. up to maxturns.
@@ -829,100 +1000,87 @@ def displayResults():
 ########################################################
 
 
-# A decklist is a dictionary where the key is the card name and the value is the number of copies. This should make importing easy.
-# The decklist parser takes a filename and tries to read it.
-parseDecklist(deckfile)
+# We want to run every deck in the deck folder? Or just one?
+runEveryDeck = False
 
-# We need to go through all the manaproducers in our deck and figure out what is going on with them.
-parseMana(decklist)
+if runEveryDeck:
+	deckdirectory = os.listdir( 'decks/' )
+else:
+	deckdirectory = []
+	# If you want to run just one deck, change runEveryDeck to false and type the filename here, without the decks/ prefix.
+	deckdirectory.append('benchmark-24-lands.txt')
 
-# We are going to be counting how many times we draw or cast each nonland card in the list. Starting off, we will want a 0 for each nonland card in the deck.
-initialCount = {}
-for card in decklist:
-	if not isLand(card):
-		initialCount[card] = 0
 
-# Draws is a dictionary; its keys are card names and its values are the number of times we saw this card in opening hands.
-draws = initialCount.copy()
+for deckfilename in deckdirectory:
 
-# casts[0] is a dictionary; its keys are card names and its values are the number of times we cast this card in Turn 1.
-# casts[1] is a dictionary; its keys are card names and its values are the number of times we cast this card by Turn 2.
-# etc. up to maxturns.
-casts = []
-for i in range(maxturns):
-	casts.append(initialCount.copy())
+	# Strip off the extension on the file.
+	deckname = deckfilename[:-4]
+	deckfile = 'decks/'+deckfilename
 
-# handsizes is a dictionary; its keys are hand sizes and its values are the number of times we started with that hand size.
-handsizes = {}
-for i in range(4,8):
-	handsizes[i] = 0
+	# A decklist is a dictionary where the key is the card name and the value is the number of copies. This should make importing easy.
+	# The decklist parser takes a filename and tries to read it.
+	deck,decklist = parseDecklist(deckfile)
 
-# Let's go!
-for trial in range(trials):
-	lineOfPlayCounter = 0
-	trialStartTime = datetime.now()
+	# We need to go through all the manaproducers in our deck and figure out what is going on with them.
+	parseMana(decklist)
 
-	if debug['DrawCard']: print('')
-	if debug['Minimal']: 
-		if trial % 100 == 0: print('Trial',trial,'starting.')
-
-	# Start by drawing a hand of 7.
-	lineofplay = drawHand(7)
-
-	# If we are considering mulligans, then we have to look at how many lands we have. This is Karsten's basic mulligan strategy for simulators.
-	if mulligans:
-		if landsInHand(lineofplay) in [0,1,6,7]:
-			if debug['mulligans']: print('  Mulligan hand of 7 cards,',landsInHand(lineofplay),'lands:',lineofplay.hand)
-			lineofplay = drawHand(6)
-			if landsInHand(lineofplay) in [0,1,5,6]:
-				if debug['mulligans']: print('  Mulligan hand of 6 cards,',landsInHand(lineofplay),'lands:',lineofplay.hand)
-				lineofplay = drawHand(5)
-				if landsInHand(lineofplay) in [0,5]:
-					if debug['mulligans']: print('  Mulligan hand of 5 cards,',landsInHand(lineofplay),'lands:',lineofplay.hand)
-					lineofplay = drawHand(4)
-
-	# When we decide to keep a hand, keep track of how large the hand was that we kept.
-	handsize = len(lineofplay.hand)
-	handsizes[handsize] += 1
-	if debug['Trial']: print('Trial #',trial,'kept opening hand of',handsize,'cards:',lineofplay.hand,'top few:',lineofplay.deck[:5])
-
-	# In this trial, we only care about how many times we cast the spells in the opening hand.
-	# spellsthistrial is the list of spells we care about.
-	# caststhistrial[0] is a dictionary with keys: spells in this opening hand, values:0 or 1, whether we cast it or not on Turn 1.
-	# caststhistrial[1] is a dictionary with keys: spells in this opening hand, values:0 or 1, whether we cast it or not on Turn 2.
-	# etc, up to maxturns.
-	spellsthistrial = []
-	caststhistrial = []
-	for i in range(maxturns):
-		caststhistrial.append({})
-	# If we have two copies of a spell in the opening hand, we don't need to check it twice as often, so use set.
-	for card in set(lineofplay.hand):
+	# We are going to be counting how many times we draw or cast each nonland card in the list. Starting off, we will want a 0 for each nonland card in the deck.
+	initialCount = {}
+	for card in decklist:
 		if not isLand(card):
-			# Optimization: If our deck contains no ramp, we can ignore spells that are too expensive to ever cast.
-			# If we are never going to play enough turns to cast this spell, just act like you never even drew it, to save time.
-			rampIsPossible = 0
-			for manaproducer in manaDatabase:
-				if not isLand(manaproducer): rampIsPossible = 1
-			if rampIsPossible or cardDatabase[card]['cmc'] <= maxturns:
-				draws[card] += 1
-				spellsthistrial.append(card)
-				for i in range(maxturns):
-					caststhistrial[i][card] = 0
+			initialCount[card] = 0
 
-	# Continue playing. During "continue playing," we check whether cards are playable and set caststhistrial to 1 when possible.
-	# If we are on the draw, we tell continuePlaying to start the turn by drawing a card, otherwise not.
-	continuePlaying(lineofplay,onthedraw)
+	# Draws is a dictionary; its keys are card names and its values are the number of times we saw this card in opening hands.
+	draws = initialCount.copy()
 
-	# After we've played through lots of lines of play, we have some 1s and 0s in caststhistrial.
-	# We add that to casts.
+	# casts[0] is a dictionary; its keys are card names and its values are the number of times we cast this card in Turn 1.
+	# casts[1] is a dictionary; its keys are card names and its values are the number of times we cast this card by Turn 2.
+	# etc. up to maxturns.
+	casts = []
 	for i in range(maxturns):
-		for card in caststhistrial[i]:
-			casts[i][card] += caststhistrial[i][card]
+		casts.append(initialCount.copy())
 
-	if debug['Trial']: print('   Trial #',trial,'complete after scanning',lineOfPlayCounter,'lines of play,',(datetime.now()-trialStartTime).total_seconds(),'s')
+	# handsizes is a dictionary; its keys are hand sizes and its values are the number of times we started with that hand size.
+	handsizes = {}
+	for i in range(4,8):
+		handsizes[i] = 0
 
-# For now, we just display the results at the end. TODO: Store them, so that if we run 5000 trials and then another 5000 trials, we can combine the data.
-displayResults()
+	# Let's go!
+	for trial in range(trials):
+		lineOfPlayCounter = 0
+		trialStartTime = datetime.now()
 
+		if debug['DrawCard']: print('')
+		if debug['Minimal']: 
+			if trial % 100 == 0: print('Trial',trial,'of deck',deckname,'starting.')
+
+		# Start by drawing a hand of 7.
+		lineofplay = drawHand(7)
+
+		# If we are considering mulligans, then we have to look at how many lands we have. This is Karsten's basic mulligan strategy for simulators.
+		if mulligans:
+			if landCountInHand(lineofplay) in [0,1,6,7]:
+				if debug['mulligans']: print('  Mulligan hand of 7 cards,',landCountInHand(lineofplay),'lands:',lineofplay.hand)
+				lineofplay = drawHand(6)
+				if landCountInHand(lineofplay) in [0,1,5,6]:
+					if debug['mulligans']: print('  Mulligan hand of 6 cards,',landCountInHand(lineofplay),'lands:',lineofplay.hand)
+					lineofplay = drawHand(5)
+					if landCountInHand(lineofplay) in [0,5]:
+						if debug['mulligans']: print('  Mulligan hand of 5 cards,',landCountInHand(lineofplay),'lands:',lineofplay.hand)
+						lineofplay = drawHand(4)
+
+		# When we decide to keep a hand, keep track of how large the hand was that we kept.
+		handsize = len(lineofplay.hand)
+		handsizes[handsize] += 1
+		if debug['Trial']: print('Trial #',trial,'kept opening hand of',handsize,'cards:',lineofplay.hand,'top few:',lineofplay.deck[:5])
+
+		# Okay, we've set up the line of play, now play it.
+		playHand(lineofplay)
+
+		if debug['Trial']: print('   Trial #',trial,'complete after scanning',lineOfPlayCounter,'lines of play,',(datetime.now()-trialStartTime).total_seconds(),'s')
+
+	storeResults()
+
+	displayResults()
 
 

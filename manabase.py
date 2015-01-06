@@ -65,8 +65,9 @@ class LineOfPlay:
 	def draw_card(self):
 		# The things we can do with a line of play include "drawing a card":
 		# Pop the first item out of the list and put it in your hand.
-		self.hand.append(self.deck.pop(0))
-		if debug['DrawCard']: print('  Drew a card:',self)
+		card = self.deck.pop(0)
+		self.hand.append(card)
+		if slowMode: print(spacing(self)+'Drew a card:',card)
 
 	def turn(self):
 		# Plays is a list of lists. The length of this list is the turn we are on.
@@ -80,7 +81,6 @@ class ManaBase:
 		self.manaDatabase = manaDatabase
 		self.manaSourcesBetterThan = manaSourcesBetterThan	
 		self.manaSourcesInOrder = manaSourcesInOrder
-
 
 def manaSourcesAvailable(lineofplay, manaBase):
 	# In a certain line of play, we want to know which combination of mana is available. New lands and summoning-sick guys aren't available.
@@ -443,6 +443,10 @@ def landCountInHand(lineofplay):
 			landsinhand += 1
 	return landsinhand
 
+def spacing(lineofplay):
+	# For slow mode, we want to display some information at the start of each printed line.
+	return 'line'+format(lineOfPlayCounter,'>5')+': '+'|  '*lineofplay.turn()
+
 def continuePlaying(lineofplay,manaBase,drawacard,spellsthistrial,caststhistrial):
 	# Okay; this is the core of the program. To "continue playing" a line of play,
 	# you need to first draw a card, then look at all the lands you could play
@@ -452,10 +456,18 @@ def continuePlaying(lineofplay,manaBase,drawacard,spellsthistrial,caststhistrial
 	# which is only stopped by the maxturns number at the top of the program.
 	# I highly recommend low values of maxturns.
 	global lineOfPlayCounter
-	lineOfPlayCounter += 1
+	global slowMode
+	global slowModeWait
 
 	# Let's get the information we need out of the ManaBase.
 	manaDatabase = manaBase.manaDatabase
+
+	if slowMode: 
+		print(spacing(lineofplay)+'Now starting turn',lineofplay.turn()+1,'with hand:',lineofplay.hand)
+		if slowModeWait.lower() == 'skip':
+			print(spacing(lineofplay)+'Our plays so far have been '+str(lineofplay.plays))
+		else:
+			slowModeWait = input(spacing(lineofplay)+'[Enter] to continue or "skip" to be done. Our plays so far have been '+str(lineofplay.plays))
 
 	# Start by drawing a card, if we are supposed to.
 	if drawacard: lineofplay.draw_card()
@@ -468,6 +480,7 @@ def continuePlaying(lineofplay,manaBase,drawacard,spellsthistrial,caststhistrial
 	if 0 in caststhistrial[lineofplay.turn()+1-1].values() and landstotry != []:
 
 		for card in set(landstotry):
+
 			# If it is a fetchland, we'll want to make two lines of play for the two fetch options. TODO: Pay 1 life 
 			if 'FetchU' in manaDatabase[card] or 'FetchW' in manaDatabase[card] or 'FetchB' in manaDatabase[card] or 'FetchG' in manaDatabase[card] or 'FetchR' in manaDatabase[card] or 'FetchBasic' in manaDatabase[card]:
 				# Figure out what our fetch options are.
@@ -498,7 +511,7 @@ def continuePlaying(lineofplay,manaBase,drawacard,spellsthistrial,caststhistrial
 							if fetch[1] in cardDatabase[target][fetch[0]]:
 								fetchtargets[target] = i
 
-				if debug['LinesOfPlay']: print('       Fetchland',card,'processed; possible fetch targets are',fetchtargets)
+				if slowMode: print(spacing(lineofplay)+'It\'s a fetch with possible fetch targets',fetchtargets)
 
 				for target in fetchtargets:
 					newlineofplay = deepcopy(lineofplay)
@@ -513,10 +526,17 @@ def continuePlaying(lineofplay,manaBase,drawacard,spellsthistrial,caststhistrial
 					# Check if anything is castable and cast it -- this increments caststhisturn and makes new lines of play for spells we know how to handle, then continues playing.
 					# One thing: we need to tell castSpells that it should not use the Evolving Wilds lands this turn.
 					if 'FetchBasic' in manaDatabase[card]:
+						lineOfPlayCounter += 1
+						if slowMode: print(spacing(lineofplay)+'Trying',card,'fetching a tapped '+target+' as our turn '+str(lineofplay.turn()+1)+' land drop, looking for spells to cast...')
 						castSpells(newlineofplay, manaBase, False, spellsthistrial,caststhistrial)
 					else:
+						lineOfPlayCounter += 1
+						if slowMode: print(spacing(lineofplay)+'Trying',card,'fetching a '+target+' as our turn '+str(lineofplay.turn()+1)+' land drop, looking for spells to cast...')
 						castSpells(newlineofplay, manaBase, True, spellsthistrial,caststhistrial)	
 			else:
+				lineOfPlayCounter += 1
+				if slowMode: print(spacing(lineofplay)+'Trying',card,'as our turn '+str(lineofplay.turn()+1)+' land drop, looking for spells to cast...')
+
 				# Playing a non-fetchland is much easier.
 				newlineofplay = deepcopy(lineofplay)
 				# Pop that card out of the hand and into the plays, then. Where is it?
@@ -534,13 +554,14 @@ def continuePlaying(lineofplay,manaBase,drawacard,spellsthistrial,caststhistrial
 						# We don't need to do another castable check here; nothing is new.
 						# However, we should definitely bottom the top card before continuing.
 						newlineofplay2.deck = newlineofplay.deck[1:] + newlineofplay.deck[:1]
+						lineOfPlayCounter += 1
+						if slowMode: print(spacing(newlineofplay2)+'   We\'ll also make a line of play where we scry to the bottom.')
 						castSpells(newlineofplay2, manaBase, True, spellsthistrial,caststhistrial)
 
 	else:
 		# All the spells were already cast, so just keep going on to later turns by not playing a land here.
 
-		if debug['CastsThisTrial']: print('     Casts this trial:',caststhistrial)
-		if debug['CastsThisTrial'] or debug['LinesOfPlay']: print('       Because of all spells cast or no lands to drop, we arent playing a land this turn.')
+		if slowMode: print(spacing(lineofplay)+'Not making a land drop this turn (either because we don\'t have one, or because we don\'t need to)')
 		# Also remember to continue this line of play (where you didn't play a land this turn).
 		lineofplay.plays.append([])
 		# Check if anything is castable and cast it -- this increments caststhisturn and makes new lines of play for spells we know how to handle, then continues playing.
@@ -548,9 +569,7 @@ def continuePlaying(lineofplay,manaBase,drawacard,spellsthistrial,caststhistrial
 
 def castSpells(lineofplay, manaBase, useThisTurnsLands, spellsthistrial, caststhistrial):
 	# This function is called when we have a line of play where the current turn has its land played, but the "Casts" have not been updated.
-
-	if debug['LinesOfPlay']: print('   ',lineofplay)
-	if debug['CastsThisTrial']: print('  Casts this trial:',caststhistrial)
+	global lineOfPlayCounter
 
 	spellsToCast = checkCastable(lineofplay, manaBase, useThisTurnsLands, spellsthistrial,caststhistrial)
 	weCouldNotCastAnything = True
@@ -569,6 +588,8 @@ def castSpells(lineofplay, manaBase, useThisTurnsLands, spellsthistrial, caststh
 			# Keep going, if we should.
 			# Here, a land for turn has already been played, so if turn() is 4 and maxturns is 4, we actually don't want to play another turn.
 			if newlineofplay.turn() < maxturns:
+				lineOfPlayCounter += 1
+				if slowMode: print(spacing(newlineofplay)+'Making a line of play where we cast',spell,'and remember we cast it.')
 				continuePlaying(newlineofplay,manaBase,True,spellsthistrial,caststhistrial)
 	if weCouldNotCastAnything:
 		# Keep going without casting anything ONLY if it was impossible to cast something. This implementation means we always cast a mana guy if we can.
@@ -638,8 +659,6 @@ def checkManaAvailability(symbolsToAcquire, manaBase, manaSourcesAvailable):
 def checkCastable(lineofplay, manaBase, useThisTurnsLands, spellsthistrial, caststhistrial):
 	# We will return the spells that we could have cast, in case castSpells needs to make more lines of play out of them.
 	spellsToCast = []
-
-	if debug['CastSpell']: print('     checkCastable on:',lineofplay)
 	turn = lineofplay.turn()
 
 	# This tells us which cards are available to tap for mana.
@@ -677,32 +696,30 @@ def checkCastable(lineofplay, manaBase, useThisTurnsLands, spellsthistrial, cast
 		isCastable = checkManaAvailability(symbolsToAcquire, manaBase, manaSources)
 
 		if isCastable:
-			if debug['CastSpell']: print('       Successfully found a way to cast',card,'... we found',manaCost,'in', manaSources,'on turn',turn)
+			if slowMode: print(spacing(lineofplay)+'Successfully paid cost for',card,'... we found',manaCost,'in', manaSources,'on turn'+str(turn)+'.')
 			# If the mana is doable, let's make sure we don't have any other requirements, like Chained to the Rocks:
 			if card == 'Chained to the Rocks':
-				if debug['CastSpell']: print('       mana is okay for '+card)
+				if slowMode: print(spacing(lineofplay)+'Well, the mana is okay, but there are other requirements to check for '+card+'.')
 				haveMountain = 0
 				for play in lineofplay.plays:
 					for card2 in play:  # Technically an Elvish Mystic might be in here, but it's okay; I guess if we cast a Mountain somehow you could Chain to it.
 						if 'subtypes' in cardDatabase[card2]:
 							if 'Mountain' in cardDatabase[card2]['subtypes']:
-								if debug['CastSpell']: print('       We successfully cast turn',turn,card,'!')
+								if slowMode: print(spacing(lineofplay)+'We successfully cast a turn '+str(turn)+' '+card+'.')
 								# Okay, it's cool that the spell was castable, but if it isn't in our hand anymore, we don't want to return it.
 								if card in lineofplay.hand: spellsToCast.append(card)
 								# Again: only count spells that were in our opening hand.
 								if card in spellsthistrial: 
-									caststhistrial[turn-1][card] = 1
-									for i in range(turn,maxturns):
+									for i in range(turn,maxturns+1):
 										caststhistrial[i-1][card] = 1
 			else:
 				# We aren't incrementing this; it is a flag 0 or 1.
-				if debug['CastSpell']: print('       We successfully cast turn',turn,card,'!')
+				if slowMode: print(spacing(lineofplay)+'We successfully cast a turn '+str(turn)+' '+card+'.')
 				# Okay, it's cool that the spell was castable, but if it isn't in our hand anymore, we don't want to return it.
 				if card in lineofplay.hand: spellsToCast.append(card)
 				# Again: only count spells that were in our opening hand. 
 				if card in spellsthistrial: 
-					caststhistrial[turn-1][card] = 1
-					for i in range(turn,maxturns):
+					for i in range(turn,maxturns+1):
 						caststhistrial[i-1][card] = 1
 
 	return spellsToCast
@@ -771,18 +788,34 @@ def playHand(lineofplay, manaBase):
 	# caststhistrial[0] is a dictionary with keys: spells in this opening hand, values:0 or 1, whether we cast it or not on Turn 1.
 	# caststhistrial[1] is a dictionary with keys: spells in this opening hand, values:0 or 1, whether we cast it or not on Turn 2.
 	# etc, up to maxturns.
+	global slowModeWait
+
 	spellsthistrial = []
 	caststhistrial = []
 	for i in range(maxturns):
 		caststhistrial.append({})
 	# If we have two copies of a spell in the opening hand, we don't need to check it twice as often, so use set.
+	rampIsPossible = 0
+	for manaproducer in manaBase.manaDatabase:
+		if not isLand(manaproducer): rampIsPossible = 1
+	if slowMode: 
+		print('')
+		if rampIsPossible:
+			print('Since ramp is possible in this deck, all spells in our opening hand will be tracked.')
+		else:
+			print('Since ramp is not possible and we are only going to turn '+str(maxturns)+', only spells up to cmc '+str(maxturns)+' will be tracked. Notice that we won\'t cast non-ramp spells at all if they weren\'t in the opening hand.')
+
+		if slowModeWait.lower() == 'skip':
+			print('[Enter] to continue or "skip" to be done. Notice that we won\'t cast non-ramp spells at all if they weren\'t in the opening hand.')
+		else:
+			slowModeWait = input('[Enter] to continue or "skip" to be done. Notice that we won\'t cast non-ramp spells at all if they weren\'t in the opening hand.')
+
+		print('')
+
 	for card in set(lineofplay.hand):
 		if not isLand(card):
 			# Optimization: If our deck contains no ramp, we can ignore spells that are too expensive to ever cast.
 			# If we are never going to play enough turns to cast this spell, just act like you never even drew it, to save time.
-			rampIsPossible = 0
-			for manaproducer in manaBase.manaDatabase:
-				if not isLand(manaproducer): rampIsPossible = 1
 			if rampIsPossible or cardDatabase[card]['cmc'] <= maxturns:
 				spellsthistrial.append(card)
 				for i in range(maxturns):
@@ -791,6 +824,13 @@ def playHand(lineofplay, manaBase):
 	# Continue playing. During "continue playing," we check whether cards are playable and set caststhistrial to 1 when possible.
 	# If we are on the draw, we tell continuePlaying to start the turn by drawing a card, otherwise not.
 	continuePlaying(lineofplay,manaBase,onthedraw,spellsthistrial,caststhistrial)
+
+	if slowMode:
+		print('')
+		if slowModeWait.lower() == 'skip':
+			print('Trial complete.')
+		else:
+			slowModeWait = input('[Enter] to continue or "skip" to be done. Trial complete.')
 
 	return caststhistrial, spellsthistrial
 
@@ -957,14 +997,12 @@ def displayResults(displaycasts = None, displaydrawsdictionary = None, displaydr
 
 	if displayonthedraw is not None and 'print' in displayformat:
 		print('')
-		print('')
 		print('Finished running',deckfile,'-',drawplay,'Ran',trials,'trials.')
 
 	if displayhandsizes is not None and 'print' in displayformat:
 		print('')
 		for handsize in displayhandsizes:
 			print('Kept',displayhandsizes[handsize],'hands with',handsize,'cards,','{:>6.1%}'.format(displayhandsizes[handsize]/trials))
-		print('')
 
 	# If we have been passed a dictionary of cards, then we can just iterate over that dictionary.
 	# If we were instead passed a list of dictionaries of cards, with the list index representing the turn number, then just look at the first turn and iterate over those cards.
@@ -1062,14 +1100,15 @@ def userInterface():
 		exit('You don\'t seem to have any decks in the /decks/ subdirectory. Go ahead and put at least one decklist in there as a text file, with one card per line. Each line could be like "4x Geist of Saint Traft".')
 
 	print('You have',numberofdecks,'decks on file. What would you like to do?')
-	print('   0) Run some trials of one of those decks.')
-	print('   1) Run some trials of all of those decks (takes lots of time!)')
-	print('  2a) Look at cumulative results for *one* of the decks in text format.')
-	print('  2b) Look at cumulative results for *one* of the decks in html format.')
-	print('  2c) Write an html results file for *one* of the decks in html format.')
-	print('  3a) Look at cumulative results for *all* of the decks in text format.')
-	print('  3b) Look at cumulative results for *all* of the decks in html format.')
-	print('  3c) Write an html results file for *all* of the decks in html format.')
+	print('   0) Run one trial of one of those decks in slow motion to watch it happen.')
+	print('   1) Run many trials of one of those decks.')
+	print('   2) Run many trials of all of those decks (takes lots of time!)')
+	print('  3a) Look at cumulative results for *one* of the decks in text format.')
+	print('  3b) Look at cumulative results for *one* of the decks in html format.')
+	print('  3c) Write an html results file for *one* of the decks in html format.')
+	print('  4a) Look at cumulative results for *all* of the decks in text format.')
+	print('  4b) Look at cumulative results for *all* of the decks in html format.')
+	print('  4c) Write an html results file for *all* of the decks in html format.')
 	print('  -1) Exit.')
 	print('')
 
@@ -1077,9 +1116,7 @@ def userInterface():
 
 	print('')
 
-	if whatToDo == '0':
-		# We need to choose the deck to use.
-		print('Okay, we\'ll run some trials on one of those decks. Which one?')
+	def chooseDeckAndGo(mode):
 		for (i, deckfile) in enumerate(deckdirectory):
 			print(format(i,'>4')+') '+deckfile)
 
@@ -1089,9 +1126,14 @@ def userInterface():
 
 		for (i, deckfile) in enumerate(deckdirectory):
 			if whichDeck == i:
-				print('Great, we\'ll run trials of',deckfile,' -- how many trials (recommend 10000 depending on computer)?')
-				print('')
-				trials = int(input('>>> '))
+				if mode is 'SingleTrial':
+					print('Great, we\'ll run one trial of',deckfile,'in slow mode.')
+					trials = 1
+				else:
+					print('Great, we\'ll run trials of',deckfile,' -- how many trials (recommend 10000 depending on computer)?')
+					print('')
+					trials = int(input('>>> '))
+
 				print('')
 				print('And how many turns would you like to go out (recommend 5, don\'t go crazy here.)?')
 				print('')
@@ -1102,11 +1144,21 @@ def userInterface():
 				return [deckdirectory[whichDeck]], maxturns, trials, False, True
 
 		# If we get here, the input was invalid.
-		print('Not sure what you meant there, so we\'re going to have to start from the beginning. Sorry!')
+		print('Not sure which deck you are talking about, so we\'re going to have to start from the beginning. Sorry!')
 		print('')
 		return userInterface()
 
-	elif whatToDo == '1':
+	if whatToDo == '0':
+		# We need to choose the deck to use.
+		print('Okay, we\'ll run one trial on one of those decks. Which deck?')
+		return chooseDeckAndGo('SingleTrial')
+
+	if whatToDo == '1':
+		# We need to choose the deck to use.
+		print('Okay, we\'ll run some trials on one of those decks. Which deck?')
+		return chooseDeckAndGo('MultiTrial')
+
+	elif whatToDo == '2':
 		print('Great, we\'ll run trials of all of those decks -- how many trials (recommend 10000 depending on computer)?')
 		print('')
 		trials = int(input('>>> '))
@@ -1117,12 +1169,12 @@ def userInterface():
 		print('')
 		return deckdirectory, maxturns, trials, False, True
 
-	elif whatToDo in ['2a','2b','2c','3a','3b','3c']:
+	elif whatToDo in ['3a','3b','3c','4a','4b','4c']:
 		if whatToDo[1] == 'a': displayformats = ['text', 'print']
 		if whatToDo[1] == 'b': displayformats = ['html', 'print']
 		if whatToDo[1] == 'c': displayformats = ['html', 'file']
 
-		if whatToDo[0] == '2':
+		if whatToDo[0] == '3':
 			displayAllTheDecks = False
 			print('Okay, let\'s look at the cumulative results of one of the decks, formatted in '+', '.join(displayformats)+'. Which deck?')
 			for (i, deckfile) in enumerate(deckdirectory):
@@ -1131,7 +1183,7 @@ def userInterface():
 			print('')
 			whichDeck = int(input('>>> '))
 			print('')
-		elif whatToDo[0] == '3':
+		elif whatToDo[0] == '4':
 			whichDeck = '-1'
 			displayAllTheDecks = True
 
@@ -1157,6 +1209,20 @@ def userInterface():
 		return userInterface()
 
 def runTrials(decksToRun, maxturns, trials, onthedraw, mulligans):
+
+	# decksToRun is a list of decks from a directory listing. maxturns and trials tell us how much work to do; onthedraw is True or False, mulligans is probably always True.
+	# If we are running a single trial, we go into a special mode where things go slowly.
+	global slowMode
+	global slowModeWait
+	# If slowModeWait ever becomes "skip", then we will not wait for keyboard input anymore even in slowmode.
+	slowModeWait = ''
+
+	global lineOfPlayCounter
+
+	if trials is 1:
+		slowMode = True
+	else:
+		slowMode = False
 
 	for deckfilename in decksToRun:
 
@@ -1195,12 +1261,13 @@ def runTrials(decksToRun, maxturns, trials, onthedraw, mulligans):
 
 		# Let's go!
 		for trial in range(trials):
-			global lineOfPlayCounter
 			lineOfPlayCounter = 0
 			trialStartTime = datetime.now()
 
-			if debug['DrawCard']: print('')
-			if debug['Minimal']: 
+			if slowMode: 
+				print('Starting a run of deck '+deckname+'.')
+				print('')
+			else:
 				if trial % 100 == 0: print('Trial',trial,'of deck',deckname,'starting.')
 
 			# Start by drawing a hand of 7.
@@ -1209,20 +1276,26 @@ def runTrials(decksToRun, maxturns, trials, onthedraw, mulligans):
 			# If we are considering mulligans, then we have to look at how many lands we have. This is Karsten's basic mulligan strategy for simulators.
 			if mulligans:
 				if landCountInHand(lineofplay) in [0,1,6,7]:
-					if debug['mulligans']: print('  Mulligan hand of 7 cards,',landCountInHand(lineofplay),'lands:',lineofplay.hand)
+					if slowMode: print('Mulligan hand of 7 cards since it has',landCountInHand(lineofplay),'lands:',lineofplay.hand)
 					lineofplay = drawHand(6, deck)
 					if landCountInHand(lineofplay) in [0,1,5,6]:
-						if debug['mulligans']: print('  Mulligan hand of 6 cards,',landCountInHand(lineofplay),'lands:',lineofplay.hand)
+						if slowMode: print('Mulligan hand of 6 cards since it has',landCountInHand(lineofplay),'lands:',lineofplay.hand)
 						lineofplay = drawHand(5, deck)
 						if landCountInHand(lineofplay) in [0,5]:
-							if debug['mulligans']: print('  Mulligan hand of 5 cards,',landCountInHand(lineofplay),'lands:',lineofplay.hand)
+							if slowMode:  print('Mulligan hand of 5 cards since it has',landCountInHand(lineofplay),'lands:',lineofplay.hand)
 							lineofplay = drawHand(4, deck)
 
 			# When we decide to keep a hand, keep track of how large the hand was that we kept.
 			handsize = len(lineofplay.hand)
 			handsizes[handsize] += 1
-			if debug['Trial']: print('Trial #',trial,'kept opening hand of',handsize,'cards:',lineofplay.hand,'top few:',lineofplay.deck[:5])
-
+			if debug['EachTrial']: print('Trial #',trial,'kept opening hand of',handsize,'cards:',lineofplay.hand,'top few:',lineofplay.deck[:maxturns])
+			if slowMode: 
+				print('Kept an opening hand of',handsize,'cards:',lineofplay.hand)
+				if slowModeWait.lower() == 'skip':
+					print('[Enter] to continue or "skip" to be done. The top of the deck looks like: '+str(lineofplay.deck[:maxturns+1]))
+				else:
+					slowModeWait = input('[Enter] to continue or "skip" to be done. The top of the deck looks like: '+str(lineofplay.deck[:maxturns+1]))
+				
 			# Okay, we've set up the line of play, now play it.
 			caststhistrial, spellsthistrial = playHand(lineofplay, manaBase)
 
@@ -1236,13 +1309,15 @@ def runTrials(decksToRun, maxturns, trials, onthedraw, mulligans):
 					casts[i][card] += caststhistrial[i][card]
 
 
-			if debug['Trial']: print('   Trial #',trial,'complete after scanning',lineOfPlayCounter,'lines of play,',(datetime.now()-trialStartTime).total_seconds(),'s')
+			if debug['EachTrial']: print('   Trial #',trial,'complete after scanning',lineOfPlayCounter,'lines of play,',(datetime.now()-trialStartTime).total_seconds(),'s')
 
 		storeResults(deckname, decklist, draws, casts)
 
 		print('')
-		print('**** Text of what we just did: ****')
+		print('****************************************** Text of what we just did: ******************************************')
 		displayResults(displaycasts = casts, displaydrawsdictionary = draws, displayhandsizes = handsizes, displayformat = ['text','print'], displayonthedraw = onthedraw, deckfile = deckfile)
+		print('')
+		print('***************************************************************************************************************')
 
 ########################################################
 #
@@ -1252,16 +1327,11 @@ def runTrials(decksToRun, maxturns, trials, onthedraw, mulligans):
 
 # TODO: Some kind of reasonable debugging output.
 debug = {}
-debug['Minimal'] = True
-debug['Trial'] = False
-debug['DrawCard'] = False
-debug['CastSpell'] = False
+debug['EachTrial'] = False
+
 debug['parseMana'] = False
-debug['LinesOfPlay'] = False
-debug['CastsThisTrial'] = False
 debug['parseDecklist'] = False
 debug['checkManaAvailability'] = False
-debug['mulligans'] = False
 debug['storeResults'] = False
 
 

@@ -1,10 +1,10 @@
-Hero's Downfall	0/58	0/58	36/58	24/31	26/31
-Anafenza, the Foremost	0/72	0/72	50/72	30/38	31/38
-Thoughtseize	40/88	81/88	85/88	45/47	46/47
-Bile Blight	0/81	32/81	59/81	25/33	28/33
-Abzan Charm	0/55	0/55	45/55	21/25	20/25
-Siege Rhino	0/39	0/39	0/39	24/39	26/39
-Rakshasa Deathdealer	0/77	49/77	68/77	38/44	40/44
-Murderous Cut	0/7	0/7	0/7	0/7	4/7
+Hero's Downfall	0/92	0/92	58/92	51/65	26/31
+Thoughtseize	60/121	111/121	117/121	78/80	46/47
+Abzan Charm	0/77	0/77	65/77	41/47	20/25
+Bile Blight	0/121	56/121	93/121	62/73	28/33
+Rakshasa Deathdealer	0/103	70/103	92/103	62/70	40/44
 Wingmate Roc	0/43	0/43	0/43	0/43	23/43
-Fleecemane Lion	0/71	56/71	66/71	30/33	31/33
+Anafenza, the Foremost	0/113	0/113	82/113	65/79	31/38
+Fleecemane Lion	0/107	90/107	101/107	65/69	31/33
+Murderous Cut	0/7	0/7	0/7	0/7	4/7
+Siege Rhino	0/85	0/85	0/85	60/85	26/39

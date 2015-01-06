@@ -11,16 +11,15 @@ Current featurelist/todo:
 
 Features
 * Given a decklist, the program shuffles the deck, draws an initial hand, and then simply tries all possible lines of play to see if any of them lead to spells being castable. 
-* A simple mulligan strategy is implemented to simulate a real player’s mulligans.
-* Painlands and other multi-option lands are handled properly.
-* Fetchlands and scrylands present decisions that are implemented as lines of play. The simulation has “prescient scries” since it tries both topping and bottoming the card, but it does not have “prescient fetches;” the deck is not shuffled after a fetch to avoid this.
-* The most common corner cases in Khans of Tarkir standard, namely Urborg, Tomb of Yawgmoth and Chained to the Rocks are handled appropriately. 
-* Mana abilities of cards like Elvish Mystic, Noble Hierarch, Sylvan Caryatid, and Abzan Banner are implemented, but mana abilities that have a cost are not currently handled well, for example a Signet silently acts like a Sol Ring right now.
+* The lines of play can be printed to the screen for the user's inspection, or played silently to collect data as quickly as possible.
 * Aggregate results are stored over multiple sets of trials and can be output in text format or HTML files via a minimal user interface.
+* A simple mulligan strategy is implemented: 7-card hands with 0, 1, 6, or 7 lands are mulliganed. 6-card hands with 0, 1, 5, or 6 lands are mulliganed. 5-card hands with 0 or 5 lands are mulliganed.
+* Multicolored lands are handled properly. Fetchlands and scrylands decisions are implemented as lines of play.
+* The most common corner cases in Khans of Tarkir standard, namely Urborg, Tomb of Yawgmoth and Chained to the Rocks are handled appropriately. 
+* Mana abilities of cards like Elvish Mystic, Noble Hierarch, Sylvan Caryatid, and Abzan Banner are implemented, but mana abilities that have a cost (e.g. Signets) silently give wrong results.
 
 To-do
 * Tests to make sure things are working before doing the larger-scale changes below.
-* Clean up debug messages so there are coherent debug levels instead of random debug flags -- in particular allow for a "watch" mode where we click through what is happening.
 * Implement Satyr Wayfinder.
 * Implement Courser of Kruphix.
 * Implement card draw spells.
@@ -32,7 +31,7 @@ To-do
 Not Planned
 * X spells will probably always be treated as though X = 0.
 * Delve and other alternate cost mechanics are probably forever ignored.
-* Fetching will never shuffle your library, meaning it does not exactly work correctly with scry or Courser; if it did, another fix would be needed to prevent “prescient fetching.”
+* Fetching will never shuffle your library, meaning it does not exactly work correctly with scry; if it did, another fix would be needed to prevent “prescient fetching.” Courser will turn every fetchland into an untapped scryland, which is pretty close.
 * “Curving out”: If your hand is Temple, Mountain, then you can’t cast both your one-drop and your two-drop on curve, but the program notices that you can do either one, so both will probably always count as castable.
  
 In case it wasn't clear, this kind of analysis is definitely inspired by Frank Karsten's Frank Analysis series, especially the article here: http://www.channelfireball.com/articles/frank-analysis-how-many-colored-mana-sources-do-you-need-to-consistently-cast-your-spells/ . 

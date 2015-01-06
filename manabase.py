@@ -45,28 +45,6 @@ json_data=open('AllCards.json')
 cardDatabase = json.load(json_data)
 json_data.close()
 
-# How many turns out are we going? How many trials? Are we on the play [False] or on the draw [True]?
-maxturns = 5
-trials = 250000
-onthedraw = False
-
-# Mulligan 7-card hands with 0,1,6,7 lands,  ... 6-card hands with 0,1,5,6 lands, ... 5-card hands with 0,5 lands.
-# With 24 lands, we should end up with 7 lands: 84.4%      6 lands: 11.7%      5 lands: 3.4%      4 lands: 0.5%
-mulligans = True
-
-debug = {}
-debug['Minimal'] = True
-debug['Trial'] = False
-debug['DrawCard'] = False
-debug['CastSpell'] = False
-debug['parseMana'] = False
-debug['LinesOfPlay'] = False
-debug['CastsThisTrial'] = False
-debug['parseDecklist'] = False
-debug['checkManaAvailability'] = False
-debug['mulligans'] = False
-debug['storeResults'] = False
-
 class LineOfPlay:
 	# A line of play is a dictionary that keeps track of a sequence of plays. For example,
 	# a line of play in human terms would be "Turn 1 play island and pass; turn 2 play Mountain and Goblin Electromancer."
@@ -850,36 +828,7 @@ def storeResults():
 					os.rename(cacheddeckfile,backupcacheddeckfile)
 					break
 		# In this case, we can open the old results and store them.
-		results = open(resultsfile)
-		for result in results:
-			# Each line in this file is a card name, then a series of proportions -- tab delimited.
-			# For example, Elvish Mystic	4/10 	6/10 	9/10 	10/10
-
-			if debug['storeResults']: print('Trying to parse the results line',result.strip())
-
-			# Start by splitting on tabs.
-			resultsequence = result.split('\t')
-
-			# We want a blank dictionary to fill in.
-			oldmaxturns = len(resultsequence) - 1
-			for i in range(oldmaxturns):
-				olddraws.append({})
-				oldcasts.append({})
-
-			# Get the card name out of the list first.
-			card = resultsequence.pop(0)
-
-			if debug['storeResults']: print('   Figured out it is a result of card "',card,'"')
-
-			# Okay, now populate the right numbers.
-			for (turn,fraction) in enumerate(resultsequence):
-				numbers = fraction.split('/')
-
-				oldcasts[turn][card] = int(numbers[0].strip())
-				olddraws[turn][card] = int(numbers[1].strip())
-				if debug['storeResults']: print('   The old data on',card,'on turn',turn+1,'was',oldcasts[turn][card],'out of',olddraws[turn][card])
-
-		results.close()
+		olddraws, oldcasts, oldmaxturns = parseResults(resultsfile)
 
 		# Now that the old numbers are in place, make a new place to hold the new totals.
 		totaldraws = []
@@ -948,50 +897,217 @@ def storeResults():
 			stringtosave += '\n'
 			f.write(stringtosave)
 
-def displayResults():
+def parseResults(resultsfile):
+	parseddraws = []
+	parsedcasts = []
+
+	results = open(resultsfile)
+	for result in results:
+		# Each line in this file is a card name, then a series of proportions -- tab delimited.
+		# For example, Elvish Mystic	4/10 	6/10 	9/10 	10/10
+		if debug['storeResults']: print('Trying to parse the results line',result.strip())
+
+		# Start by splitting on tabs.
+		resultsequence = result.split('\t')
+
+		# We want a blank dictionary to fill in.
+		parsedmaxturns = len(resultsequence) - 1
+		for i in range(parsedmaxturns):
+			if len(parseddraws) <= i: parseddraws.append({})
+			if len(parsedcasts) <= i: parsedcasts.append({})
+
+		# Get the card name out of the list first.
+		card = resultsequence.pop(0)
+
+		if debug['storeResults']: print('   Figured out it is a result of card "',card,'"')
+
+		# Okay, now populate the right numbers.
+		for (turn,fraction) in enumerate(resultsequence):
+			numbers = fraction.split('/')
+
+			parsedcasts[turn][card] = int(numbers[0].strip())
+			parseddraws[turn][card] = int(numbers[1].strip())
+			if debug['storeResults']: print('   The parsed data on',card,'on turn',turn+1,'is',parsedcasts[turn][card],'out of',parseddraws[turn][card])
+
+	results.close()
+	return parseddraws, parsedcasts, parsedmaxturns
+
+def displayResults(displaycasts = None, displaydrawsdictionary = None, displaydrawslist = None, displayhandsizes = None, displayonthedraw = None, displayformat = 'text'):
 	# casts[0] is a dictionary; its keys are card names and its values are the number of times we cast this card in Turn 1.
 	# casts[1] is a dictionary; its keys are card names and its values are the number of times we cast this card by Turn 2.
 	# etc. up to maxturns.
+
+	# draws might be passed to us as a straight-up dictionary of cards, or it might be a list of dictionaries in the same style as casts above.
+
 	# handsizes is a dictionary; its keys are the numbers 4 through 7, and the values are the number of times we kept hands of that size.
 	# onthedraw is a boolean that tells us play or draw.
-	if onthedraw: 
+	if displayonthedraw is True:
 		drawplay = 'On the Draw.'
-	else:
+	elif displayonthedraw is False:
 		drawplay = 'On the Play.'
 
-	print('')
-	print('')
-	print('Finished running',deckfile,'-',drawplay,'Ran',trials,'trials.')
+	if displayonthedraw is not None:
+		print('')
+		print('')
+		print('Finished running',deckfile,'-',drawplay,'Ran',trials,'trials.')
 
-	print('')
-	for handsize in handsizes:
-		print('Kept',handsizes[handsize],'hands with',handsize,'cards,','{:>6.1%}'.format(handsizes[handsize]/trials))
-	print('')
+	if displayhandsizes is not None:
+		print('')
+		for handsize in handsizes:
+			print('Kept',handsizes[handsize],'hands with',handsize,'cards,','{:>6.1%}'.format(handsizes[handsize]/trials))
+		print('')
+
+	# If we have been passed a dictionary of cards, then we can just iterate over that dictionary.
+	# If we were instead passed a list of dictionaries of cards, with the list index representing the turn number, then just look at the first turn and iterate over those cards.
+	if displaydrawslist is not None:
+		cardstoiterate = displaydrawslist[0]
+	else:
+		cardstoiterate = displaydrawsdictionary
 
 	percents = {}
 	# To justify the text, we need to know the max card length.
-	maxcardlength = max([len(card) for card in draws])
+	maxcardlength = max([len(card) for card in cardstoiterate])
 
-	for card in draws:
-		spacestojustify = maxcardlength - len(card)
-		percents[card] = ' '*spacestojustify + card +':  Draws: '+'{:>6}'.format(str(draws[card]))+'  '
-		for i in range(maxturns):
-			if draws[card] > 0:
-				percent = casts[i][card]/draws[card]
-				percent = '{:>6.1%}'.format(percent)
-				percents[card] += ('  Cast by '+str(i+1)+': '+percent+'')
+	# How many turns are we looking at here?
+	displaymaxturns = len(displaycasts)
+
+	if displayformat == 'html': 
+		print('<table><tr><th align=center>Card</th>')
+		for i in range(displaymaxturns):
+			print('<th align=center width=100>Turn',str(i+1),'</th>')
+		print('</tr>')
+
+	for card in cardstoiterate:
+		if displayformat == 'text': percents[card] = ' '*(maxcardlength - len(card)) + card
+		if displayformat == 'html': percents[card] = '<tr><td align=right>'+card+'</td>'
+
+		for i in range(displaymaxturns):
+
+			# If we are using a draw dictionary, then we find the number of draws with drawsdictionary[card].
+			# If we have a draws list, then it is a list of dictionaries, where for example on turn 4 we use draws[3][card]
+			if displaydrawslist is not None:
+				if card not in displaydrawslist[i]: continue
+				numberofdraws = displaydrawslist[i][card]
+			else:
+				if card not in displaydrawsdictionary: continue
+				numberofdraws = displaydrawsdictionary[card]
+
+			if numberofdraws > 0:
+				percent = displaycasts[i][card]/numberofdraws
+
+				if displayformat == 'text': percents[card] += ('  Cast by '+str(i+1)+': '+'{:>6.1%}'.format(percent)+'')
+				if displayformat == 'html': percents[card] += ('<td align=center>' + '{:.1%}'.format(percent))
 
 				# This basic margin of error calculation is only valid if we have more than 30 trials and at least 5 successes and at least 5 failures.
-				if casts[i][card] >= 5 and (draws[card]-casts[i][card]) >= 5 and draws[card] >= 30:
-					error = 1.96*math.sqrt(casts[i][card]*(draws[card]-casts[i][card])/math.pow(draws[card],3))
-					error = '{:<6.1%}'.format(error)
-					percents[card]+= '+-'+error
+				error = 1.96*math.sqrt(displaycasts[i][card]*(numberofdraws-displaycasts[i][card])/math.pow(numberofdraws,3))
+
+				# Only actually display the margin of error if it is at least 0.1% and if the statistics tells us this is even meaningful.
+				if displaycasts[i][card] >= 5 and (numberofdraws-displaycasts[i][card]) >= 5 and numberofdraws >= 30 and error > 0.001:
+					if displayformat == 'text': percents[card] += ('+-' + '{:<6.1%}'.format(error))
+					if displayformat == 'html': percents[card] += ('&plusmn;' + '{:.1%}'.format(error) + '</td>')
 				else:
-					percents[card]+= '        '
-					
-	for card in draws:
+					if displayformat == 'text': percents[card]+= '        '
+
+		if displayformat == 'html': percents[card] += '</tr>'
+
+	if displayformat == 'html': percents[card] += '</table>'
+
+	for card in cardstoiterate:
 		print(percents[card])
 
+def userInterface():
+
+	# Let's actually ask the user what they want to do for once.
+	print('Welcome to Manabase; please excuse the rudimentary user interface!')
+	print('')
+
+	# Go see how many decks we have available.
+	deckdirectory = os.listdir( 'decks/' )
+	numberofdecks = len(deckdirectory)
+
+	if numberofdecks == 0:
+		exit('You don\'t seem to have any decks in the /decks/ subdirectory. Go ahead and put at least one decklist in there as a text file, with one card per line. Each line could be like "4x Geist of Saint Traft".')
+
+	print('You have',numberofdecks,'decks on file. What would you like to do?')
+	print('   0) Run some trials of one of those decks.')
+	print('   1) Run some trials of all of those decks (takes lots of time!)')
+	print('   2) Look at cumulative results for one of the decks in text format.')
+	print('   3) Look at cumulative results for one of the decks in html format.')
+	print('')
+
+	whatToDo = int(input('>>> '))
+
+	print('')
+
+	if whatToDo == 0:
+		# We need to choose the deck to use.
+		print('Okay, we\'ll run some trials on one of those decks. Which one?')
+		for (i, deckfile) in enumerate(deckdirectory):
+			print(format(i,'>4')+') '+deckfile)
+
+		print('')
+		whichDeck = int(input('>>> '))
+		print('')
+
+		for (i, deckfile) in enumerate(deckdirectory):
+			if whichDeck == i:
+				print('Great, we\'ll run trials of',deckfile,' -- how many trials (recommend 10000 depending on computer)?')
+				print('')
+				trials = int(input('>>> '))
+				print('')
+				print('And how many turns would you like to go out (recommend 5, don\'t go crazy here.)?')
+				print('')
+				maxturns = int(input('>>> '))
+				print('')
+
+				# We are returning a list of decksToRun, maxturns, trials, onthedraw, mulligans
+				return [deckdirectory[whichDeck]], maxturns, trials, False, True
+
+		# If we get here, the input was invalid.
+		print('Not sure what you meant there, so we\'re going to have to start from the beginning. Sorry!')
+		print('')
+		return userInterface()
+
+	elif whatToDo == 1:
+		print('Great, we\'ll run trials of all of those decks -- how many trials (recommend 10000 depending on computer)?')
+		print('')
+		trials = int(input('>>> '))
+		print('')
+		print('And how many turns would you like to go out (recommend 5, don\'t go crazy here.)?')
+		print('')
+		maxturns = int(input('>>> '))
+		print('')
+		return deckdirectory, maxturns, trials, False, True
+
+	elif whatToDo == 2 or whatToDo == 3:
+		if whatToDo == 2: displayformatstring = 'text'
+		if whatToDo == 3: displayformatstring = 'html'
+
+		print('Okay, let\'s look at the cumulative results of one of the decks formatted in '+displayformatstring+'. Which deck?')
+		for (i, deckfile) in enumerate(deckdirectory):
+			print(format(i,'>4')+') '+deckfile)
+
+		print('')
+		whichDeck = int(input('>>> '))
+		print('')
+
+		for (i, deckfile) in enumerate(deckdirectory):
+			if whichDeck == i:
+				parseddraws, parsedcasts, parsedmaxturns = parseResults('results/'+deckfile[:-4]+'-results.txt')
+				displayResults(displaycasts = parsedcasts, displaydrawslist = parseddraws, displayformat = displayformatstring)
+				print('')
+				print('Okay, that\'s all set, so we\'re starting over.')
+				return userInterface()
+
+		# If we got this far, then the input was invalid.
+		print('Not sure what you meant there, so we\'re going to have to start from the beginning. Sorry!')
+		print('')
+		return userInterface()
+
+	else:
+		print('Not sure what you meant there, so we\'re going to have to start from the beginning. Sorry!')
+		print('')
+		return userInterface()
 
 ########################################################
 #
@@ -999,19 +1115,29 @@ def displayResults():
 #
 ########################################################
 
+# TODO: Some kind of reasonable debugging output.
+debug = {}
+debug['Minimal'] = True
+debug['Trial'] = False
+debug['DrawCard'] = False
+debug['CastSpell'] = False
+debug['parseMana'] = False
+debug['LinesOfPlay'] = False
+debug['CastsThisTrial'] = False
+debug['parseDecklist'] = False
+debug['checkManaAvailability'] = False
+debug['mulligans'] = False
+debug['storeResults'] = False
 
-# We want to run every deck in the deck folder? Or just one?
-runEveryDeck = False
-
-if runEveryDeck:
-	deckdirectory = os.listdir( 'decks/' )
-else:
-	deckdirectory = []
-	# If you want to run just one deck, change runEveryDeck to false and type the filename here, without the decks/ prefix.
-	deckdirectory.append('benchmark-24-lands.txt')
+# How many turns out are we going? How many trials? Are we on the play [False] or on the draw [True]?
+# With mulligans = true, we mulligan 7-card hands with 0,1,6,7 lands,  ... 6-card hands with 0,1,5,6 lands, ... 5-card hands with 0,5 lands.
+# With 24 lands, we should end up with 7 lands: 84.4%      6 lands: 11.7%      5 lands: 3.4%      4 lands: 0.5%
+decksToRun, maxturns, trials, onthedraw, mulligans = userInterface()
 
 
-for deckfilename in deckdirectory:
+
+
+for deckfilename in decksToRun:
 
 	# Strip off the extension on the file.
 	deckname = deckfilename[:-4]
@@ -1081,6 +1207,18 @@ for deckfilename in deckdirectory:
 
 	storeResults()
 
-	displayResults()
+	print('')
+	print('**** Text of what we just did: ****')
+	displayResults(displaycasts = casts, displaydrawsdictionary = draws, displayhandsizes = handsizes, displayformat = 'text', displayonthedraw = onthedraw)
+
+	# print('')
+	# print('**** HTML of what we just did: ****')
+	# displayResults(displaycasts = casts, displaydrawsdictionary = draws, displayhandsizes = None, displayformat = 'html', displayonthedraw = onthedraw)
+
+	# print('')
+	# print('**** HTML of all the results so far from this deck: ****')
+	# displayResults(displaycasts = totalcasts, displaydrawslist = totaldraws, displayhandsizes = None, displayformat = 'html', displayonthedraw = onthedraw)
 
 
+print('')
+print('We made it!')

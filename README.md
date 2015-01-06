@@ -5,7 +5,7 @@ A simulator that runs a Magic: The Gathering deck through repeated trials to det
 
 To use the tool, you will need a Python interpreter, the allCards.json file from mtgjson, and decklists in text format.
 
-I'm not a professional programmer, so suggestions and constructive criticism about the tool are welcome; any statements that imply I think this is a masterwork of programming will be brutally ignored.
+I'm not a professional programmer, so suggestions and constructive criticism about the tool are welcome!
 
 Current featurelist/todo:
 
@@ -16,9 +16,10 @@ Features
 * Fetchlands and scrylands present decisions that are implemented as lines of play. The simulation has “prescient scries” since it tries both topping and bottoming the card, but it does not have “prescient fetches;” the deck is not shuffled after a fetch to avoid this.
 * The most common corner cases in the current standard: Urborg, Tomb of Yawgmoth and Chained to the Rocks are handled appropriately. 
 * Mana abilities of cards like Elvish Mystic and Abzan Banner are implemented, but mana abilities that have a cost are not currently handled well, for example a Signet acts like a Sol Ring right now.
+* Aggregate results are stored over multiple sets of trials and can be output in text format or HTML tables via a minimal user interface.
 
 To-do
-* Rewrite displayResults() so that we can display cumulative results and output HTML tables
+* Deal with the weirdness of the global variables that are being used, and fix the user interface.
 * Tests to make sure things are working before doing the larger-scale changes below.
 * Implement Satyr Wayfinder.
 * Implement Courser of Kruphix.

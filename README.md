@@ -16,16 +16,15 @@ Features
 * Fetchlands and scrylands present decisions that are implemented as lines of play. The simulation has “prescient scries” since it tries both topping and bottoming the card, but it does not have “prescient fetches;” the deck is not shuffled after a fetch to avoid this.
 * The most common corner cases in Khans of Tarkir standard, namely Urborg, Tomb of Yawgmoth and Chained to the Rocks are handled appropriately. 
 * Mana abilities of cards like Elvish Mystic, Noble Hierarch, Sylvan Caryatid, and Abzan Banner are implemented, but mana abilities that have a cost are not currently handled well, for example a Signet silently acts like a Sol Ring right now.
-* Aggregate results are stored over multiple sets of trials and can be output in text format or HTML tables via a minimal user interface.
+* Aggregate results are stored over multiple sets of trials and can be output in text format or HTML files via a minimal user interface.
 
 To-do
-* Deal with the weirdness of the global variables that are being used, and fix the user interface.
 * Tests to make sure things are working before doing the larger-scale changes below.
+* Clean up debug messages so there are coherent debug levels instead of random debug flags -- in particular allow for a "watch" mode where we click through what is happening.
 * Implement Satyr Wayfinder.
 * Implement Courser of Kruphix.
 * Implement card draw spells.
 * Implement Nykthos.
-* Clean up debug messages so there are coherent debug levels instead of random debug flags.
 * Track pain taken from painlands and fetches; track life gained from lands and Courser.
 * Allow an option to scale the percentages so that not making land drops doesn’t count against a spell's castability.
 * Do something intelligent with sideboards.

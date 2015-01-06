@@ -901,6 +901,9 @@ def parseResults(resultsfile):
 	parseddraws = []
 	parsedcasts = []
 
+	if not os.path.isfile(resultsfile):
+		return None, None, None
+
 	results = open(resultsfile)
 	for result in results:
 		# Each line in this file is a card name, then a series of proportions -- tab delimited.
@@ -1001,16 +1004,21 @@ def displayResults(displaycasts = None, displaydrawsdictionary = None, displaydr
 				# This basic margin of error calculation is only valid if we have more than 30 trials and at least 5 successes and at least 5 failures.
 				error = 1.96*math.sqrt(displaycasts[i][card]*(numberofdraws-displaycasts[i][card])/math.pow(numberofdraws,3))
 
-				# Only actually display the margin of error if it is at least 0.1% and if the statistics tells us this is even meaningful.
 				if displaycasts[i][card] >= 5 and (numberofdraws-displaycasts[i][card]) >= 5 and numberofdraws >= 30 and error > 0.001:
+					# Only actually display the margin of error if it is at least 0.1% and if the statistics tells us this is even meaningful.
 					if displayformat == 'text': percents[card] += ('+-' + '{:<6.1%}'.format(error))
 					if displayformat == 'html': percents[card] += ('&plusmn;' + '{:.1%}'.format(error) + '</td>')
+				elif error < 0.001:
+					# If we have the error down below .01, display nothing.
+					if displayformat == 'text': percents[card] += '        '
 				else:
-					if displayformat == 'text': percents[card]+= '        '
+					# If the problem is a small sample size, go with plus or minus question mark.
+					if displayformat == 'text': percents[card] += '+-???%  '
+					if displayformat == 'html': percents[card] += ('&plusmn;' + '???%')
 
 		if displayformat == 'html': percents[card] += '</tr>'
 
-	if displayformat == 'html': percents[card] += '</table>'
+	if displayformat == 'html': percents[card] += '</table><hr>'
 
 	for card in cardstoiterate:
 		print(percents[card])
@@ -1031,15 +1039,17 @@ def userInterface():
 	print('You have',numberofdecks,'decks on file. What would you like to do?')
 	print('   0) Run some trials of one of those decks.')
 	print('   1) Run some trials of all of those decks (takes lots of time!)')
-	print('   2) Look at cumulative results for one of the decks in text format.')
-	print('   3) Look at cumulative results for one of the decks in html format.')
+	print('  2a) Look at cumulative results for *one* of the decks in text format.')
+	print('  2b) Look at cumulative results for *one* of the decks in html format.')
+	print('  3a) Look at cumulative results for *all* of the decks in text format.')
+	print('  3b) Look at cumulative results for *all* of the decks in html format.')
 	print('')
 
-	whatToDo = int(input('>>> '))
+	whatToDo = (input('>>> '))
 
 	print('')
 
-	if whatToDo == 0:
+	if whatToDo == '0':
 		# We need to choose the deck to use.
 		print('Okay, we\'ll run some trials on one of those decks. Which one?')
 		for (i, deckfile) in enumerate(deckdirectory):
@@ -1068,7 +1078,7 @@ def userInterface():
 		print('')
 		return userInterface()
 
-	elif whatToDo == 1:
+	elif whatToDo == '1':
 		print('Great, we\'ll run trials of all of those decks -- how many trials (recommend 10000 depending on computer)?')
 		print('')
 		trials = int(input('>>> '))
@@ -1079,28 +1089,34 @@ def userInterface():
 		print('')
 		return deckdirectory, maxturns, trials, False, True
 
-	elif whatToDo == 2 or whatToDo == 3:
-		if whatToDo == 2: displayformatstring = 'text'
-		if whatToDo == 3: displayformatstring = 'html'
+	elif whatToDo in ['2a','2b','3a','3b']:
+		if whatToDo[1] == 'a': displayformatstring = 'text'
+		if whatToDo[1] == 'b': displayformatstring = 'html'
 
-		print('Okay, let\'s look at the cumulative results of one of the decks formatted in '+displayformatstring+'. Which deck?')
+		if whatToDo[0] == '2':
+			displayAllTheDecks = False
+			print('Okay, let\'s look at the cumulative results of one of the decks formatted in '+displayformatstring+'. Which deck?')
+			for (i, deckfile) in enumerate(deckdirectory):
+				print(format(i,'>4')+') '+deckfile)
+
+			print('')
+			whichDeck = int(input('>>> '))
+			print('')
+		elif whatToDo[0] == '3':
+			whichDeck = '-1'
+			displayAllTheDecks = True
+
 		for (i, deckfile) in enumerate(deckdirectory):
-			print(format(i,'>4')+') '+deckfile)
-
-		print('')
-		whichDeck = int(input('>>> '))
-		print('')
-
-		for (i, deckfile) in enumerate(deckdirectory):
-			if whichDeck == i:
+			if whichDeck == i or displayAllTheDecks:
 				parseddraws, parsedcasts, parsedmaxturns = parseResults('results/'+deckfile[:-4]+'-results.txt')
-				displayResults(displaycasts = parsedcasts, displaydrawslist = parseddraws, displayformat = displayformatstring)
 				print('')
-				print('Okay, that\'s all set, so we\'re starting over.')
-				return userInterface()
+				print('Results for deck',deckfile)
+				if parseddraws is None:
+					print('Hmm; you don\'t have any results for this deck yet. Why not run some trials on it using other options first?')
+				else:
+					displayResults(displaycasts = parsedcasts, displaydrawslist = parseddraws, displayformat = displayformatstring)
 
-		# If we got this far, then the input was invalid.
-		print('Not sure what you meant there, so we\'re going to have to start from the beginning. Sorry!')
+		# If we got this far, then we displayed everything we could.
 		print('')
 		return userInterface()
 

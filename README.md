@@ -3,19 +3,19 @@ Manabase
 
 A simulator that runs a Magic: The Gathering deck through repeated trials to determine the effectiveness of the deck's mana.
 
-To use the tool, you will need a Python interpreter, the allCards.json file from mtgjson, and decklists in text format.
+To use the tool, you will need a Python interpreter (this was tested with Python 3.4, see https://www.python.org/download/releases/3.4.0/) and decklists in text format.
 
 I'm not a professional programmer, so suggestions and constructive criticism about the tool are welcome!
 
 Current featurelist/todo:
 
 Features
-* Given an initial hand, the program simply tries all possible lines of play.
+* Given a decklist, the program shuffles the deck, draws an initial hand, and then simply tries all possible lines of play to see if any of them lead to spells being castable. 
 * A simple mulligan strategy is implemented to simulate a real player’s mulligans.
 * Painlands and other multi-option lands are handled properly.
 * Fetchlands and scrylands present decisions that are implemented as lines of play. The simulation has “prescient scries” since it tries both topping and bottoming the card, but it does not have “prescient fetches;” the deck is not shuffled after a fetch to avoid this.
-* The most common corner cases in the current standard: Urborg, Tomb of Yawgmoth and Chained to the Rocks are handled appropriately. 
-* Mana abilities of cards like Elvish Mystic and Abzan Banner are implemented, but mana abilities that have a cost are not currently handled well, for example a Signet acts like a Sol Ring right now.
+* The most common corner cases in Khans of Tarkir standard, namely Urborg, Tomb of Yawgmoth and Chained to the Rocks are handled appropriately. 
+* Mana abilities of cards like Elvish Mystic, Noble Hierarch, Sylvan Caryatid, and Abzan Banner are implemented, but mana abilities that have a cost are not currently handled well, for example a Signet silently acts like a Sol Ring right now.
 * Aggregate results are stored over multiple sets of trials and can be output in text format or HTML tables via a minimal user interface.
 
 To-do

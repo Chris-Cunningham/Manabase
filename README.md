@@ -19,7 +19,6 @@ Features
 * Aggregate results are stored over multiple sets of trials and can be output in text format or HTML tables via a minimal user interface.
 
 To-do
-* If we're going to the trouble of creating output in HTML format, we might as well write it to an HTML file.
 * Deal with the weirdness of the global variables that are being used, and fix the user interface.
 * Tests to make sure things are working before doing the larger-scale changes below.
 * Implement Satyr Wayfinder.

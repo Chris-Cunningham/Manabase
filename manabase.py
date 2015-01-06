@@ -935,7 +935,7 @@ def parseResults(resultsfile):
 	results.close()
 	return parseddraws, parsedcasts, parsedmaxturns
 
-def displayResults(displaycasts = None, displaydrawsdictionary = None, displaydrawslist = None, displayhandsizes = None, displayonthedraw = None, displayformat = 'text'):
+def displayResults(displaycasts = None, displaydrawsdictionary = None, displaydrawslist = None, displayhandsizes = None, displayonthedraw = None, displayformat = 'text', deckfile = ''):
 	# casts[0] is a dictionary; its keys are card names and its values are the number of times we cast this card in Turn 1.
 	# casts[1] is a dictionary; its keys are card names and its values are the number of times we cast this card by Turn 2.
 	# etc. up to maxturns.
@@ -949,12 +949,12 @@ def displayResults(displaycasts = None, displaydrawsdictionary = None, displaydr
 	elif displayonthedraw is False:
 		drawplay = 'On the Play.'
 
-	if displayonthedraw is not None:
+	if displayonthedraw is not None and 'print' in displayformat:
 		print('')
 		print('')
 		print('Finished running',deckfile,'-',drawplay,'Ran',trials,'trials.')
 
-	if displayhandsizes is not None:
+	if displayhandsizes is not None and 'print' in displayformat:
 		print('')
 		for handsize in handsizes:
 			print('Kept',handsizes[handsize],'hands with',handsize,'cards,','{:>6.1%}'.format(handsizes[handsize]/trials))
@@ -974,15 +974,15 @@ def displayResults(displaycasts = None, displaydrawsdictionary = None, displaydr
 	# How many turns are we looking at here?
 	displaymaxturns = len(displaycasts)
 
-	if displayformat == 'html': 
-		print('<table><tr><th align=center>Card</th>')
+	if 'html' in displayformat: 
+		header = '<table><tr><th align=center>Card</th>'
 		for i in range(displaymaxturns):
-			print('<th align=center width=100>Turn',str(i+1),'</th>')
-		print('</tr>')
+			header += '<th align=center width=100>Turn'+str(i+1)+'</th>'
+		header += '</tr>'
 
 	for card in cardstoiterate:
-		if displayformat == 'text': percents[card] = ' '*(maxcardlength - len(card)) + card
-		if displayformat == 'html': percents[card] = '<tr><td align=right>'+card+'</td>'
+		if 'text' in displayformat: percents[card] = ' '*(maxcardlength - len(card)) + card
+		if 'html' in displayformat: percents[card] = '<tr><td align=right>'+card+'</td>'
 
 		for i in range(displaymaxturns):
 
@@ -998,30 +998,47 @@ def displayResults(displaycasts = None, displaydrawsdictionary = None, displaydr
 			if numberofdraws > 0:
 				percent = displaycasts[i][card]/numberofdraws
 
-				if displayformat == 'text': percents[card] += ('  Cast by '+str(i+1)+': '+'{:>6.1%}'.format(percent)+'')
-				if displayformat == 'html': percents[card] += ('<td align=center>' + '{:.1%}'.format(percent))
+				if 'text' in displayformat: percents[card] += ('  Cast by '+str(i+1)+': '+'{:>6.1%}'.format(percent)+'')
+				if 'html' in displayformat: percents[card] += ('<td align=center>' + '{:.1%}'.format(percent))
 
 				# This basic margin of error calculation is only valid if we have more than 30 trials and at least 5 successes and at least 5 failures.
 				error = 1.96*math.sqrt(displaycasts[i][card]*(numberofdraws-displaycasts[i][card])/math.pow(numberofdraws,3))
 
 				if displaycasts[i][card] >= 5 and (numberofdraws-displaycasts[i][card]) >= 5 and numberofdraws >= 30 and error > 0.001:
 					# Only actually display the margin of error if it is at least 0.1% and if the statistics tells us this is even meaningful.
-					if displayformat == 'text': percents[card] += ('+-' + '{:<6.1%}'.format(error))
-					if displayformat == 'html': percents[card] += ('&plusmn;' + '{:.1%}'.format(error) + '</td>')
+					if 'text' in displayformat: percents[card] += ('+-' + '{:<6.1%}'.format(error))
+					if 'html' in displayformat: percents[card] += ('&plusmn;' + '{:.1%}'.format(error) + '</td>')
 				elif error < 0.001:
 					# If we have the error down below .01, display nothing.
-					if displayformat == 'text': percents[card] += '        '
+					if 'text' in displayformat: percents[card] += '        '
 				else:
 					# If the problem is a small sample size, go with plus or minus question mark.
-					if displayformat == 'text': percents[card] += '+-???%  '
-					if displayformat == 'html': percents[card] += ('&plusmn;' + '???%')
+					if 'text' in displayformat: percents[card] += '+-???%  '
+					if 'html' in displayformat: percents[card] += ('&plusmn;' + '???%')
 
-		if displayformat == 'html': percents[card] += '</tr>'
+		if 'html' in displayformat: percents[card] += '</tr>'
 
-	if displayformat == 'html': percents[card] += '</table><hr>'
+	if 'html' in displayformat: percents[card] += '</table><hr>'
 
-	for card in cardstoiterate:
-		print(percents[card])
+	if 'print' in displayformat:
+		print(header)
+		for card in cardstoiterate:
+			print(percents[card])
+
+	if 'file' in displayformat:
+		if 'html' in displayformat:
+			htmlfile = 'html/'+deckfile[:-4]+'.html'
+			with open(htmlfile,'w') as f:
+				f.write('<html><head>Results for '+deckfile)
+				f.write(header)
+				for card in cardstoiterate:
+					f.write(percents[card])
+				f.write('</html>')
+			print('HTML successfully output to',htmlfile)
+			print('')
+
+		else:
+			print('Non-html files not implemented.')
 
 def userInterface():
 
@@ -1041,8 +1058,10 @@ def userInterface():
 	print('   1) Run some trials of all of those decks (takes lots of time!)')
 	print('  2a) Look at cumulative results for *one* of the decks in text format.')
 	print('  2b) Look at cumulative results for *one* of the decks in html format.')
+	print('  2c) Write an html results file for *one* of the decks in html format.')
 	print('  3a) Look at cumulative results for *all* of the decks in text format.')
 	print('  3b) Look at cumulative results for *all* of the decks in html format.')
+	print('  3c) Write an html results file for *all* of the decks in html format.')
 	print('')
 
 	whatToDo = (input('>>> '))
@@ -1089,13 +1108,14 @@ def userInterface():
 		print('')
 		return deckdirectory, maxturns, trials, False, True
 
-	elif whatToDo in ['2a','2b','3a','3b']:
-		if whatToDo[1] == 'a': displayformatstring = 'text'
-		if whatToDo[1] == 'b': displayformatstring = 'html'
+	elif whatToDo in ['2a','2b','2c','3a','3b','3c']:
+		if whatToDo[1] == 'a': displayformats = ['text', 'print']
+		if whatToDo[1] == 'b': displayformats = ['html', 'print']
+		if whatToDo[1] == 'c': displayformats = ['html', 'file']
 
 		if whatToDo[0] == '2':
 			displayAllTheDecks = False
-			print('Okay, let\'s look at the cumulative results of one of the decks formatted in '+displayformatstring+'. Which deck?')
+			print('Okay, let\'s look at the cumulative results of one of the decks, formatted in '+', '.join(displayformats)+'. Which deck?')
 			for (i, deckfile) in enumerate(deckdirectory):
 				print(format(i,'>4')+') '+deckfile)
 
@@ -1110,11 +1130,11 @@ def userInterface():
 			if whichDeck == i or displayAllTheDecks:
 				parseddraws, parsedcasts, parsedmaxturns = parseResults('results/'+deckfile[:-4]+'-results.txt')
 				print('')
-				print('Results for deck',deckfile)
+				print('Processing results for deck: ',deckfile)
 				if parseddraws is None:
 					print('Hmm; you don\'t have any results for this deck yet. Why not run some trials on it using other options first?')
 				else:
-					displayResults(displaycasts = parsedcasts, displaydrawslist = parseddraws, displayformat = displayformatstring)
+					displayResults(displaycasts = parsedcasts, displaydrawslist = parseddraws, displayformat = displayformats, deckfile = deckfile)
 
 		# If we got this far, then we displayed everything we could.
 		print('')
@@ -1225,15 +1245,15 @@ for deckfilename in decksToRun:
 
 	print('')
 	print('**** Text of what we just did: ****')
-	displayResults(displaycasts = casts, displaydrawsdictionary = draws, displayhandsizes = handsizes, displayformat = 'text', displayonthedraw = onthedraw)
+	displayResults(displaycasts = casts, displaydrawsdictionary = draws, displayhandsizes = handsizes, displayformat = ['text','print'], displayonthedraw = onthedraw, deckfile = deckfile)
 
 	# print('')
 	# print('**** HTML of what we just did: ****')
-	# displayResults(displaycasts = casts, displaydrawsdictionary = draws, displayhandsizes = None, displayformat = 'html', displayonthedraw = onthedraw)
+	# displayResults(displaycasts = casts, displaydrawsdictionary = draws, displayhandsizes = None, displayformat = ['html','print'], displayonthedraw = onthedraw, deckfile = deckfile)
 
 	# print('')
 	# print('**** HTML of all the results so far from this deck: ****')
-	# displayResults(displaycasts = totalcasts, displaydrawslist = totaldraws, displayhandsizes = None, displayformat = 'html', displayonthedraw = onthedraw)
+	# displayResults(displaycasts = totalcasts, displaydrawslist = totaldraws, displayhandsizes = None, displayformat = ['html','print'], displayonthedraw = onthedraw, deckfile = deckfile)
 
 
 print('')

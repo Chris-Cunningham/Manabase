@@ -883,7 +883,7 @@ def drawHand(handsize, deck, lineOfPlayCounter):
 
 	return lineofplay
 
-def playHand(lineofplay, manaBase, maxturns):
+def playHand(lineofplay, manaBase, maxturns, onthedraw):
 	"""Given a line of play, a mana base, and a maximum number of turns, this
 	function actually plays the hand out by initializing caststhistrial and
 	deciding which spells we are going to worry about casting.
@@ -900,7 +900,7 @@ def playHand(lineofplay, manaBase, maxturns):
 	caststhistrial = []
 	for i in range(maxturns):
 		caststhistrial.append({})
-	# If we have two copies of a spell in the opening hand, we don't need to check it twice as often, so use set.
+
 	rampIsPossible = 0
 	for manaproducer in manaBase.manaDatabase:
 		if not isLand(manaproducer): rampIsPossible = 1
@@ -918,6 +918,7 @@ def playHand(lineofplay, manaBase, maxturns):
 
 		print('')
 
+	# If we have two copies of a spell in the opening hand, we don't need to check it twice as often, so use set.
 	for card in set(lineofplay.hand):
 		if not isLand(card):
 			# Optimization: If our deck contains no ramp, we can ignore spells that are too expensive to ever cast.
@@ -1423,7 +1424,7 @@ def runTrials(decksToRun, maxturns, trials, onthedraw, mulligans):
 					slowModeWait = input('[Enter] to continue or "skip" to be done. The top of the deck looks like: '+str(lineofplay.deck[:maxturns+1]))
 				
 			# Okay, we've set up the line of play, now play it.
-			caststhistrial, spellsthistrial = playHand(lineofplay, manaBase, maxturns)
+			caststhistrial, spellsthistrial = playHand(lineofplay, manaBase, maxturns, onthedraw)
 
 			# Go through the spells we drew and increment draws.
 			for spell in spellsthistrial:

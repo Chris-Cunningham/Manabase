@@ -320,7 +320,97 @@ class TestContinuePlaying(unittest.TestCase):
                                            )[1][3], #turn number minus 1 here at the end
                            {'Phyrexian Obliterator': 0, 'Cloudfin Raptor': 0} )
 
+    def test_mana_dork_gets_cast(self):
+        """This line of play just makes sure we cast the Elvish Mystic."""
+        self.assertDictEqual( continuePlaying(  LineOfPlay([],['Forest','Elvish Mystic'],['Forest']),
+                                             ManaBase({'Forest': 1,'Elvish Mystic': 2}),
+                                             False, 
+                                             [ 'Elvish Mystic',],
+                                             [{'Elvish Mystic': 0}], 0, 1 #maxturns here at the end
+                                           )[1][0], #turn number minus 1 here at the end
+                           {'Elvish Mystic': 1} )
 
+    def test_mana_dork_gets_cast_through_playHand(self):
+        """This line of play just makes sure we cast the Elvish Mystic a different way."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Forest','Elvish Mystic'],['Forest']),
+                                      ManaBase({'Forest': 1,'Elvish Mystic': 2}),
+                                      1,       # maxturns here
+                                      False 
+                                      )[0][0], # turn number minus 1 here
+                           {'Elvish Mystic': 1} )
+
+    def test_mana_dork_is_a_mana_source(self):
+        """This line of play makes sure the Mystic taps for green mana."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Forest','Elvish Mystic','Strangleroot Geist'],['Strangleroot Geist']),
+                                      ManaBase({'Forest': 1,'Elvish Mystic': 1, 'Strangleroot Geist': 2}),
+                                      2,       # maxturns here
+                                      False 
+                                     )[0][1], # turn number minus 1 here
+                             {'Elvish Mystic': 1, 'Strangleroot Geist': 1} )
+
+    def test_mana_dork_isnt_hasty(self):
+        """This line of play makes sure the Mystic doesn't have superhaste."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Forest','Elvish Mystic','Strangleroot Geist'],['Strangleroot Geist']),
+                                      ManaBase({'Forest': 1,'Elvish Mystic': 1, 'Strangleroot Geist': 2}),
+                                      2,       # maxturns here
+                                      False 
+                                     )[0][0], # turn number minus 1 here
+                             {'Elvish Mystic': 1, 'Strangleroot Geist': 0} )
+
+    def test_this_mana_dork_isnt_hasty_either(self):
+        """This line of play makes sure off color dorks don't have haste."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Forest',"Avacyn's Pilgrim",'Fleecemane Lion'],['Fleecemane Lion']),
+                                      ManaBase({'Forest': 1,"Avacyn's Pilgrim": 1, 'Fleecemane Lion': 2}),
+                                      2,       # maxturns here
+                                      False 
+                                     )[0][0], # turn number minus 1 here
+                             {"Avacyn's Pilgrim": 1, 'Fleecemane Lion': 0} )
+
+    def test_mana_dork_ramps_us_once(self):
+        """This line of play makes sure ramping works."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Forest',"Avacyn's Pilgrim",'Forest','Loxodon Smiter'],['Loxodon Smiter']),
+                                      ManaBase({'Forest': 2,"Avacyn's Pilgrim": 1, 'Loxodon Smiter': 2}),
+                                      2,       # maxturns here
+                                      False 
+                                     )[0][1], # turn number minus 1 here
+                             {"Avacyn's Pilgrim": 1, 'Loxodon Smiter': 1} )
+       
+    def test_two_mana_dorks_ramp_us_twice(self):
+        """This line of play makes sure ramping works."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Forest',"Avacyn's Pilgrim","Avacyn's Pilgrim",'Forest','Forest','Wingmate Roc'],['Wingmate Roc','Wingmate Roc']),
+                                      ManaBase({'Forest': 3,"Avacyn's Pilgrim": 1, 'Wingmate Roc': 3}),
+                                      3,       # maxturns here
+                                      False 
+                                     )[0][2], # turn number minus 1 here
+                             {"Avacyn's Pilgrim": 1, 'Wingmate Roc': 1} )
+
+    def test_not_doublecasting_two_manadorks_with_one_mana(self):
+        """This line of play makes sure even if both mana dorks are possible on one, we don't cast both on one."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Forest',"Avacyn's Pilgrim",'Elvish Mystic','Forest','Polukranos, World Eater'],['Polukranos, World Eater','Polukranos, World Eater']),
+                                      ManaBase({'Forest': 2, "Avacyn's Pilgrim": 1, 'Elvish Mystic': 1, 'Polukranos, World Eater': 3}),
+                                      3,       # maxturns here
+                                      False 
+                                     )[0][1], # turn number minus 1 here
+                             {"Avacyn's Pilgrim": 1, 'Elvish Mystic': 1, 'Polukranos, World Eater': 0} )
+
+    def test_use_at_least_one_of_two_manadorks(self):
+        """This line of play makes sure even if both mana dorks are possible on one, we don't cast both on one."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Forest',"Avacyn's Pilgrim",'Elvish Mystic','Forest','Polukranos, World Eater'],['Polukranos, World Eater','Polukranos, World Eater']),
+                                      ManaBase({'Forest': 2, "Avacyn's Pilgrim": 1, 'Elvish Mystic': 1, 'Polukranos, World Eater': 3}),
+                                      3,       # maxturns here
+                                      False 
+                                     )[0][2], # turn number minus 1 here
+                             {"Avacyn's Pilgrim": 1, 'Elvish Mystic': 1, 'Polukranos, World Eater': 1} )
+
+# To do: Mana Rocks
+
+# To do: multicolored mana dorks
+
+# To do: all-colored mana dorks
+
+# To do: Chained to the rocks
+
+# To do: Fetchlands
 
 if __name__ == '__main__':
     unittest.main()

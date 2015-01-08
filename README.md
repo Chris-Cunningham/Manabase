@@ -19,7 +19,7 @@ Features
 * Mana abilities of cards like Elvish Mystic, Noble Hierarch, Sylvan Caryatid, and Abzan Banner are implemented, but mana abilities that have a cost (e.g. Signets) silently give wrong results.
 
 To-do
-* Tests to make sure things are working before doing the larger-scale changes below.
+* Finish the last battery of tests.
 * Implement Satyr Wayfinder.
 * Implement Courser of Kruphix.
 * Implement card draw spells.

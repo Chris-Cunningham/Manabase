@@ -498,7 +498,7 @@ def spacing(lineofplay, lineOfPlayCounter):
 def continuePlaying(lineofplay,manaBase,drawacard,spellsthistrial,caststhistrial,lineOfPlayCounter,maxturns):
 	"""Given a line of play, a mana base, whether we should open by drawing a card,
 	and the data of how this trial has gone so far, this function plays one more turn.
-	It returns the new lineOfPlayCounter.
+	It returns the new lineOfPlayCounter and the new list of casts this trial.
 	"""
 	# Okay; this is the core of the program. To "continue playing" a line of play,
 	# you need to first draw a card, then look at all the lands you could play
@@ -581,11 +581,11 @@ def continuePlaying(lineofplay,manaBase,drawacard,spellsthistrial,caststhistrial
 					if 'FetchBasic' in manaDatabase[card]:
 						lineOfPlayCounter += 1
 						if slowMode: print(spacing(lineofplay, lineOfPlayCounter)+'Trying',card,'fetching a tapped '+target+' as our turn '+str(lineofplay.turn()+1)+' land drop, looking for spells to cast...')
-						lineOfPlayCounter = castSpells(newlineofplay, manaBase, False, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
+						lineOfPlayCounter, caststhistrial = castSpells(newlineofplay, manaBase, False, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
 					else:
 						lineOfPlayCounter += 1
 						if slowMode: print(spacing(lineofplay, lineOfPlayCounter)+'Trying',card,'fetching a '+target+' as our turn '+str(lineofplay.turn()+1)+' land drop, looking for spells to cast...')
-						lineOfPlayCounter = castSpells(newlineofplay, manaBase, True, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)	
+						lineOfPlayCounter, caststhistrial = castSpells(newlineofplay, manaBase, True, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)	
 			else:
 				lineOfPlayCounter += 1
 				if slowMode: print(spacing(lineofplay, lineOfPlayCounter)+'Trying',card,'as our turn '+str(lineofplay.turn()+1)+' land drop, looking for spells to cast...')
@@ -596,20 +596,22 @@ def continuePlaying(lineofplay,manaBase,drawacard,spellsthistrial,caststhistrial
 				i = newlineofplay.hand.index(card)
 				newlineofplay.plays.append([newlineofplay.hand.pop(i)])
 				# Check if anything is castable and cast it -- this increments caststhisturn and makes new lines of play for spells we know how to handle.
-				lineOfPlayCounter = castSpells(newlineofplay, manaBase, True, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
+				lineOfPlayCounter, caststhistrial = castSpells(newlineofplay, manaBase, True, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
 
 				# If we just played a scryland, then we need to scry to the bottom and cast spells. We only care about this if there are turns left.
-				# Here, a land for turn has already been played, so if turn() is 4 and maxturns is 4, we actually don't want to play another turn.
-				if newlineofplay.turn() < maxturns:
+				# lineofplay.turn() was the turn before we played the scryland, so if maxturns is 4 and lineofplay.turn() is 3, we actually don't want to play another turn.
+				if lineofplay.turn()+1 < maxturns:
 					if 'scry' in manaDatabase[card]:
 						# If the land was a scryland, then we also need a line of play where we bottomed the top card.
-						newlineofplay2 = deepcopy(newlineofplay)
+						newlineofplay2 = deepcopy(lineofplay)
+						i = newlineofplay2.hand.index(card)
+						newlineofplay2.plays.append([newlineofplay2.hand.pop(i)])
 						# We don't need to do another castable check here; nothing is new.
 						# However, we should definitely bottom the top card before continuing.
-						newlineofplay2.deck = newlineofplay.deck[1:] + newlineofplay.deck[:1]
+						newlineofplay2.deck = newlineofplay2.deck[1:] + newlineofplay2.deck[:1]
 						lineOfPlayCounter += 1
-						if slowMode: print(spacing(newlineofplay2, lineOfPlayCounter)+'   We\'ll also make a line of play where we scry to the bottom.')
-						lineOfPlayCounter = castSpells(newlineofplay2, manaBase, True, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
+						if slowMode: print(spacing(lineofplay, lineOfPlayCounter)+'   We\'ll also make a line of play where we scry to the bottom.')
+						lineOfPlayCounter, caststhistrial = castSpells(newlineofplay2, manaBase, True, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
 
 	else:
 		# All the spells were already cast, so just keep going on to later turns by not playing a land here.
@@ -618,102 +620,20 @@ def continuePlaying(lineofplay,manaBase,drawacard,spellsthistrial,caststhistrial
 		# Also remember to continue this line of play (where you didn't play a land this turn).
 		lineofplay.plays.append([])
 		# Check if anything is castable and cast it -- this increments caststhisturn and makes new lines of play for spells we know how to handle, then continues playing.
-		lineOfPlayCounter = castSpells(lineofplay, manaBase, True, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
+		lineOfPlayCounter, caststhistrial = castSpells(lineofplay, manaBase, True, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
 
-	return lineOfPlayCounter
+	return lineOfPlayCounter, caststhistrial
 
 def castSpells(lineofplay, manaBase, useThisTurnsLands, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns):
-	# This function is called when we have a line of play where the current turn has its land played, but the "Casts" have not been updated.
+	"""When we have played a land for this turn already but need to update 
+	caststhistrial[turn-1] with the with the new spell cast numbers, we call
+	castSpells. This returns the new lineOfPlayCounter and the new count
+	of which spells have been cast by which turn.
 
-	spellsToCast = checkCastable(lineofplay, manaBase, useThisTurnsLands, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
-	weCouldNotCastAnything = True
+	This function is also the one that branches new lines of play in the situation
+	where we could play either an Elvish Mystic or an Avacyn's Pilgrim turn 1.
+	"""
 
-	manaDatabase = manaBase.manaDatabase
-
-	# We don't actually want to cast very many spells. For now, the only ones we care about are mana producers.
-	# TODO: Courser, Card Draw Spells
-	for spell in spellsToCast:
-		if spell in manaDatabase:
-			# This one is a mana producer, so make a new line of play where we cast this.
-			weCouldNotCastAnything = False
-			newlineofplay = deepcopy(lineofplay)
-			i = newlineofplay.hand.index(spell)
-			newlineofplay.plays[newlineofplay.turn()-1].append(newlineofplay.hand.pop(i))
-			# Keep going, if we should.
-			# Here, a land for turn has already been played, so if turn() is 4 and maxturns is 4, we actually don't want to play another turn.
-			if newlineofplay.turn() < maxturns:
-				lineOfPlayCounter += 1
-				if slowMode: print(spacing(newlineofplay, lineOfPlayCounter)+'Making a line of play where we cast',spell,'and remember we cast it.')
-				lineOfPlayCounter = continuePlaying(newlineofplay, manaBase, True, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
-	if weCouldNotCastAnything:
-		# Keep going without casting anything ONLY if it was impossible to cast something. This implementation means we always cast a mana guy if we can.
-		# Here, a land for turn has already been played, so if turn() is 4 and maxturns is 4, we actually don't want to play another turn.
-		if lineofplay.turn() < maxturns:
-			lineOfPlayCounter = continuePlaying(lineofplay, manaBase, True, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
-
-	return lineOfPlayCounter
-
-def checkManaAvailability(symbolsToAcquire, manaBase, manaSourcesAvailable):
-	if debug['checkManaAvailability']: print('         Trying to acquire',symbolsToAcquire,'with',manaSourcesAvailable)
-	
-	# TODO: Some things like Nykthos or Sol Ring might make more than one mana.
-	cmc = 0
-	for symbol in symbolsToAcquire:
-		if is_int(symbol): 
-			cmc += int(symbol)
-		else:
-			cmc += 1
-	if cmc > len(manaSourcesAvailable):
-		if debug['checkManaAvailability']: print('         Thats not possible with this few sources.')
-		return False
-
-
-	# We return true if there is only one symbol to acquire and we can do it.
-	if len(symbolsToAcquire) == 1:
-		lastsymbol = symbolsToAcquire[0]
-
-		# TODO: Some things like Nykthos or Sol Ring might make more than one mana.
-		if is_int(lastsymbol):
-			if int(lastsymbol) <= len(manaSourcesAvailable):
-				if debug['checkManaAvailability']: print('         Success! The last symbol was',lastsymbol,'and we had enough left.')
-				return True
-			else:
-				if debug['checkManaAvailability']: print('         Failure! The last symbol was',lastsymbol,'and we didnt have enough left.')
-				return False
-		elif any([(ManaPool('{'+lastsymbol+'}') in manaBase.manaDatabase[card]) for card in manaSourcesAvailable]):
-			if debug['checkManaAvailability']: print('         Success! The last symbol was',lastsymbol,'and we found it.')
-			return True
-		else:
-			if debug['checkManaAvailability']: print('         Failure! The last symbol was',lastsymbol,'and we couldnt find it.')
-			return False
-	else:
-		nextSymbol = symbolsToAcquire[0]
-
-		manaSourcesTried = []
-		# We need to try a variety of mana sources to acquire this mana. We'll try in the order of the list manaSourcesInOrder.
-		for manaSource in manaBase.manaSourcesInOrder:
-			if manaSource in manaSourcesAvailable:
-				# Okay! We will try this -- but here is the thing. We don't try it if it is better than something we already tried.
-				# This is the key optimization. If we tried using "Forest" for {G} and failed, then it is pointless to try using "Temple of Abandon" for the same {G}.
-				if not any([manaSource in manaBase.manaSourcesBetterThan[manaSourceTried] for manaSourceTried in manaSourcesTried]):
-					if ManaPool('{'+nextSymbol+'}') in manaBase.manaDatabase[manaSource]:
-						# It's possible to use this card to satisfy this symbol, so we'll try it.
-						manaSourcesTried.append(manaSource)
-						newsymbolsToAcquire = list(symbolsToAcquire)
-						symbolRemoved = newsymbolsToAcquire.pop(0)
-						newmanaSourcesAvailable = list(manaSourcesAvailable)
-						newmanaSourcesAvailable.remove(manaSource)
-						if debug['checkManaAvailability']: print('            With this try we have tried',manaSourcesTried,'for',nextSymbol,'- removing source',manaSource,'for',nextSymbol,': remaining sources',newmanaSourcesAvailable)
-						# The only way this ends is if we find a path through this tree that satisfies the final symbol. If so, we win!
-						if checkManaAvailability(newsymbolsToAcquire, manaBase, newmanaSourcesAvailable): return True
-				else:
-					if debug['checkManaAvailability']: print('            So far we tried',manaSourcesTried,'for',nextSymbol,'- no point trying',manaSource,'for',nextSymbol)
-		# If we get here, then I guess we didn't make it.
-		if debug['checkManaAvailability']: print('         Failure! We couldnt get',symbolsToAcquire,'from',manaSourcesAvailable)		
-		return False
-
-def checkCastable(lineofplay, manaBase, useThisTurnsLands, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns):
-	# We will return the spells that we could have cast, in case castSpells needs to make more lines of play out of them.
 	spellsToCast = []
 	turn = lineofplay.turn()
 
@@ -747,9 +667,9 @@ def checkCastable(lineofplay, manaBase, useThisTurnsLands, spellsthistrial, cast
 		if symbolsToAcquire == []:
 			symbolsToAcquire = ['{0}']
 
-		# This function recursively tries to acquire all these symbols given these mana sources.
+		# This function recursively tries to acquire all these symbols given these mana sources. If Urborg is in any of the plays, pass True in the urborg slot.
 		if debug['checkManaAvailability']: print('         Starting the chain, trying to get',symbolsToAcquire,'from',manaSources)
-		isCastable = checkManaAvailability(symbolsToAcquire, manaBase, manaSources)
+		isCastable = checkManaAvailability(symbolsToAcquire, manaBase, manaSources, any('Urborg, Tomb of Yawgmoth' in play for play in lineofplay.plays))
 
 		if isCastable:
 			if slowMode: print(spacing(lineofplay, lineOfPlayCounter)+'Successfully paid cost for',card,'... we found',manaCost,'in', manaSources,'on turn'+str(turn)+'.')
@@ -778,9 +698,129 @@ def checkCastable(lineofplay, manaBase, useThisTurnsLands, spellsthistrial, cast
 					for i in range(turn,maxturns+1):
 						caststhistrial[i-1][card] = 1
 
-	return spellsToCast
+	weCouldNotCastAnything = True
+
+	manaDatabase = manaBase.manaDatabase
+
+	# We don't actually want to cast very many spells. For now, the only ones we care about are mana producers.
+	# TODO: Courser, Card Draw Spells
+	for spell in spellsToCast:
+		if spell in manaDatabase:
+			# This one is a mana producer, so make a new line of play where we cast this.
+			weCouldNotCastAnything = False
+			newlineofplay = deepcopy(lineofplay)
+			i = newlineofplay.hand.index(spell)
+			newlineofplay.plays[newlineofplay.turn()-1].append(newlineofplay.hand.pop(i))
+			# Keep going, if we should.
+			# Here, a land for turn has already been played, so if turn() is 4 and maxturns is 4, we actually don't want to play another turn.
+			if newlineofplay.turn() < maxturns:
+				lineOfPlayCounter += 1
+				if slowMode: print(spacing(newlineofplay, lineOfPlayCounter)+'Making a line of play where we cast',spell,'and remember we cast it.')
+				lineOfPlayCounter, caststhistrial = continuePlaying(newlineofplay, manaBase, True, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
+	if weCouldNotCastAnything:
+		# Keep going without casting anything ONLY if it was impossible to cast something. This implementation means we always cast a mana guy if we can.
+		# Here, a land for turn has already been played, so if turn() is 4 and maxturns is 4, we actually don't want to play another turn.
+		if lineofplay.turn() < maxturns:
+			lineOfPlayCounter, caststhistrial = continuePlaying(lineofplay, manaBase, True, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
+
+	return lineOfPlayCounter, caststhistrial
+
+def checkManaAvailability(symbolsToAcquire, manaBase, manaSourcesAvailable, urborgIsOut):
+	"""Input is the list of mana symbols we want to create in order, the manabase 
+	we are working with, and the mana sources that are available to tap for mana. 
+	Returns either True or False depending on whether we can make those mana symbols.
+	When passing mana symbols to this list, make sure the colorless symbol appears last.
+
+	This function calls itself recursively to emulate a human's decisionmaking
+	when trying to tap mana. For example, when trying to use the following mana
+	sources to create WRGU:	Forest, Temple of Epiphany, Island, Temple of Triumph, call
+	   checkManaAvailability(['{U}','{G}','{R}','{W}'],ManaBase(decklist),['Forest', 'Temple of Triumph', 'Temple of Epiphany', 'Island'], False)
+	This function first tries to tap land for {U} by trying an Island. It knows to 
+	try the Island first (thanks to manaSourcesInOrder) and it knows that if tapping
+	Island for {U} fails, there is no use trying to tap Temple of Epiphany for {U}
+	(thanks to manaSourcesBetterThan). It then calls itself with the easier requirement:
+	   checkManaAvailability(['{G}','{R}','{W}'],ManaBase(decklist),['Forest', 'Temple of Triumph', 'Temple of Epiphany'], False)
+	Next it taps Forest for {G}, then calls:
+	   checkManaAvailability(['{R}','{W}'],ManaBase(decklist),['Temple of Triumph', 'Temple of Epiphany'], False)
+	Now it taps Temple of Triumph for {R} and calls:
+	   checkManaAvailability(['{W}'],ManaBase(decklist),['Temple of Epiphany'], False)
+	which returns False. But because the temples are not strictly better than each other, it goes back 
+	and tries tapping Temple of Epiphany for the R instead, ending with
+	   checkManaAvailability(['{W}'],ManaBase(decklist),['Temple of Triumph'], False)
+	which returns True.	
+	"""
+	if debug['checkManaAvailability']: print('         Trying to acquire',symbolsToAcquire,'with',manaSourcesAvailable)
+	
+	# TODO: Some things like Nykthos or Sol Ring might make more than one mana; this treats them as making 1!
+	cmc = 0
+	for symbol in symbolsToAcquire:
+		if is_int(symbol): 
+			cmc += int(symbol)
+		else:
+			cmc += 1
+	if cmc > len(manaSourcesAvailable):
+		if debug['checkManaAvailability']: print('         Thats not possible with this few sources.')
+		return False
+
+
+	# We return true if there is only one symbol to acquire and we can do it.
+	if len(symbolsToAcquire) == 1:
+		lastsymbol = symbolsToAcquire[0]
+
+		# TODO: Some things like Nykthos or Sol Ring might make more than one mana.
+		if is_int(lastsymbol):
+			if int(lastsymbol) <= len(manaSourcesAvailable):
+				if debug['checkManaAvailability']: print('         Success! The last symbol was',lastsymbol,'and we had enough left.')
+				return True
+			else:
+				if debug['checkManaAvailability']: print('         Failure! The last symbol was',lastsymbol,'and we didnt have enough left.')
+				return False
+		elif any([(ManaPool('{'+lastsymbol+'}') in manaBase.manaDatabase[card]) for card in manaSourcesAvailable]) or  (lastsymbol is 'B' and urborgIsOut and len(manaSourcesAvailable) > 0):
+			if debug['checkManaAvailability']: print('         Success! The last symbol was',lastsymbol,'and we found it.')
+			return True
+		else:
+			if debug['checkManaAvailability']: print('         Failure! The last symbol was',lastsymbol,'and we couldnt find it.')
+			return False
+	else:
+		nextSymbol = symbolsToAcquire[0]
+
+		manaSourcesTried = []
+		# We need to try a variety of mana sources to acquire this mana. We'll try in the order of the list manaSourcesInOrder.
+		for manaSource in manaBase.manaSourcesInOrder:
+			if manaSource in manaSourcesAvailable:
+				# Okay! We will try this -- but here is the thing. We don't try it if it is better than something we already tried.
+				# This is the key optimization. If we tried using "Forest" for {G} and failed, then it is pointless to try using "Temple of Abandon" for the same {G}.
+				if not any([manaSource in manaBase.manaSourcesBetterThan[manaSourceTried] for manaSourceTried in manaSourcesTried]):
+					if ManaPool('{'+nextSymbol+'}') in manaBase.manaDatabase[manaSource] or (nextSymbol is 'B' and urborgIsOut):
+						# It's possible to use this card to satisfy this symbol, so we'll try it.
+						manaSourcesTried.append(manaSource)
+						newsymbolsToAcquire = list(symbolsToAcquire)
+						symbolRemoved = newsymbolsToAcquire.pop(0)
+						newmanaSourcesAvailable = list(manaSourcesAvailable)
+						newmanaSourcesAvailable.remove(manaSource)
+						if debug['checkManaAvailability']: print('            With this try we have tried',manaSourcesTried,'for',nextSymbol,'- removing source',manaSource,'for',nextSymbol,': remaining sources',newmanaSourcesAvailable)
+						# The only way this ends is if we find a path through this tree that satisfies the final symbol. If so, we win!
+						if checkManaAvailability(newsymbolsToAcquire, manaBase, newmanaSourcesAvailable, urborgIsOut): return True
+				else:
+					if debug['checkManaAvailability']: print('            So far we tried',manaSourcesTried,'for',nextSymbol,'- no point trying',manaSource,'for',nextSymbol)
+		# If we get here, then I guess we didn't make it.
+		if debug['checkManaAvailability']: print('         Failure! We couldnt get',symbolsToAcquire,'from',manaSourcesAvailable)		
+		return False
 
 def parseDecklist(deckfile):
+	"""Input is a path to a text file; output is a tuple of (deck, decklist).
+	A deck is a list of cards in order; a decklist is a dictionary of cards
+	and how many of that card are in the deck.
+
+	This function tries hard to read any text file as long as each line is one
+	card with two entries separated by the delimiter [ x\t]+. So, for
+	example it splits
+	2x Xathrid Necromancer		as  	'2','Xathrid Necromancer'
+	10x   	xxx	  x  Forest 	as  	'10','Forest'
+
+	It also successfully stops reading the decklist if it ever sees the word "Sideboard."  
+	"""
+
 	# This will return a tuple of deck, decklist
 
 	decklist = {}
@@ -813,7 +853,7 @@ def parseDecklist(deckfile):
 			exit('Decklist error; sorry!! Fix the decklist and run program again.')
 
 	if sum(decklist.values()) not in [40,60]:
-		if debug['Minimal'] or debug['parseDecklist']: print('Warning: decklist not 40 or 60 cards.')
+		if debug['parseDecklist']: print('Warning: decklist not 40 or 60 cards.')
 
 	if debug['parseDecklist']: print('Decklist Parsing Complete. Decklist Below:')
 	if debug['parseDecklist']: print(decklist)
@@ -826,7 +866,10 @@ def parseDecklist(deckfile):
 	return deck, decklist
 
 def drawHand(handsize, deck, lineOfPlayCounter):
-	# This function draws a hand of handsize cards.
+	"""Given a handsize and a deck, this shuffles the deck then draws a hand 
+	of that many cards. It then returns a LineOfPlay object with the result. 
+	Mulligans handled elsewhere. Python's random.sample is the shuffler.
+	"""
 	# Shuffle the deck. TODO: Is random.sample good enough? I'm not sure actually.
 	currentdeck = random.sample(deck, len(deck))
 	# Create a new line of play based on this deck.
@@ -841,6 +884,10 @@ def drawHand(handsize, deck, lineOfPlayCounter):
 	return lineofplay
 
 def playHand(lineofplay, manaBase, maxturns):
+	"""Given a line of play, a mana base, and a maximum number of turns, this
+	function actually plays the hand out by initializing caststhistrial and
+	deciding which spells we are going to worry about casting.
+	"""
 	# In this trial, we only care about how many times we cast the spells in the opening hand.
 	# spellsthistrial is the list of spells we care about.
 	# caststhistrial[0] is a dictionary with keys: spells in this opening hand, values:0 or 1, whether we cast it or not on Turn 1.
@@ -883,7 +930,7 @@ def playHand(lineofplay, manaBase, maxturns):
 	# Continue playing. During "continue playing," we check whether cards are playable and set caststhistrial to 1 when possible.
 	# If we are on the draw, we tell continuePlaying to start the turn by drawing a card, otherwise not.
 	lineOfPlayCounter = 0
-	lineOfPlayCounter = continuePlaying(lineofplay, manaBase, onthedraw, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
+	lineOfPlayCounter, caststhistrial = continuePlaying(lineofplay, manaBase, onthedraw, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
 
 	if slowMode:
 		print('')
@@ -895,6 +942,10 @@ def playHand(lineofplay, manaBase, maxturns):
 	return caststhistrial, spellsthistrial
 
 def storeResults(deckname, decklist, draws, casts):
+	"""Given the name of the deck and the results of a series of trials,
+	this function reads the old results file, combines the data from these
+	trials, and writes the combined data to a file.
+	"""
 	# Okay. draws is a dictionary with keys: spell names and with values: the number of times we drew this spell.
 	# casts[0] is a dictionary; its keys are card names and its values are the number of times we cast this card in Turn 1.
 	# casts[1] is a dictionary; its keys are card names and its values are the number of times we cast this card by Turn 2.
@@ -920,19 +971,24 @@ def storeResults(deckname, decklist, draws, casts):
 		# If so, we need to make sure it's the same deck that we have stored results for.
 		cacheddeck,cacheddecklist = parseDecklist(cacheddeckfile)
 		if cacheddecklist != decklist:
-			if debug['storeResults']: print('It looks like the stored results are for a different deck that used the same filename.')
+			print('Warning: It looks like the stored results are for a different deck that used the same filename.')
 			# If the deck changed, rename the old results so we don't lose them.
 			# We want to rename the old results from something-results.txt to something-backup-1-results.txt
 			backupnumber = 0
 			while True:
 				backupnumber += 1
-				backupresultsfile = 'results/'+deckfile[:-4]+'-backup-'+backupnumber+'-results.txt'
-				backupcacheddeckfile = 'results/'+deckfile[:-4]+'-backup-'+backupnumber+'-cached.txt'
+				backupresultsfile = 'results/'+deckname+'-backup-'+str(backupnumber)+'-results.txt'
+				backupcacheddeckfile = 'results/'+deckname+'-backup-'+str(backupnumber)+'-cached.txt'
 				if debug['storeResults']: print('Storing old results in files',backupresultsfile,'and',backupcacheddeckfile)
 				if not os.path.isfile(backupresultsfile):
 					os.rename(resultsfile,backupresultsfile)
 					os.rename(cacheddeckfile,backupcacheddeckfile)
 					break
+			print('Moved the old results to results/'+deckname+'-backup-'+str(backupnumber)+'-results.txt to avoid losing them.')
+			# Now if we moved the results file out of the way, we'd prefer to pretend it was never there. As a result, "if isfile(resultsfile)" will happen again.
+
+	# First we need to check if we have any stored results for this deck.
+	if os.path.isfile(resultsfile):
 		# In this case, we can open the old results and store them.
 		olddraws, oldcasts, oldmaxturns = parseResults(resultsfile)
 
@@ -1004,6 +1060,16 @@ def storeResults(deckname, decklist, draws, casts):
 			f.write(stringtosave)
 
 def parseResults(resultsfile):
+	""" This function reads lines of data like
+	Elvish Mystic	12/14	11/12	12/12	12/12	12/12
+	and interprets it as "in tests run so far, we have these results:
+	We cast Turn 1 Mystic 12 times out of the 14 times we saw it in our opening hand
+	We cast Turn 2 Mystic 11 times out of the 12 times we saw it in our opening hand
+	etc.
+
+	The reason these denominators could be different in this case is that someone
+	apparently ran two trials that only did simulations out to one turn.
+	"""
 	parseddraws = []
 	parsedcasts = []
 
@@ -1042,6 +1108,8 @@ def parseResults(resultsfile):
 	return parseddraws, parsedcasts, parsedmaxturns
 
 def displayResults(displaycasts = None, displaydrawsdictionary = None, displaydrawslist = None, displayhandsizes = None, displayonthedraw = None, displayformat = 'text', deckfile = ''):
+	""" This function either displays or writes to a file the results of a series of trials.
+	"""
 	# casts[0] is a dictionary; its keys are card names and its values are the number of times we cast this card in Turn 1.
 	# casts[1] is a dictionary; its keys are card names and its values are the number of times we cast this card by Turn 2.
 	# etc. up to maxturns.
@@ -1383,23 +1451,22 @@ def runTrials(decksToRun, maxturns, trials, onthedraw, mulligans):
 #
 ########################################################
 
-# TODO: Some kind of reasonable debugging output.
+
+# TODO: Even better debugging output.
+slowMode = False
+
 debug = {}
 debug['EachTrial'] = False
-
 debug['parseMana'] = False
 debug['parseDecklist'] = False
 debug['checkManaAvailability'] = False
 debug['storeResults'] = False
 
-
 if __name__ == "__main__":
-    import doctest
-    slowMode = False
-    doctest.testmod()
+	import doctest
+	doctest.testmod()
 
-while True:
-	decksToRun, maxturns, trials, onthedraw, mulligans = userInterface()
-	runTrials(decksToRun, maxturns, trials, onthedraw, mulligans)
-	print('')
-
+	while True:
+		decksToRun, maxturns, trials, onthedraw, mulligans = userInterface()
+		runTrials(decksToRun, maxturns, trials, onthedraw, mulligans)
+		print('')

@@ -67,7 +67,7 @@ class LineOfPlay:
 		# Pop the first item out of the list and put it in your hand.
 		card = self.deck.pop(0)
 		self.hand.append(card)
-		if slowMode: print(spacing(self)+'Drew a card:',card)
+		return card
 
 	def turn(self):
 		# Plays is a list of lists. The length of this list is the turn we are on.
@@ -77,13 +77,162 @@ class ManaBase:
 	# A ManaBase is a dictionary of lands and what they do, in addition to some synthesized information about how to play the mana.
 	# For example, we need to know that Temple of Epiphany is strictly better than Island, so if tapping Island for blue doesn't get us there, there is no reason to try tapping Temple of Epiphany for the same blue.
 	# Additionally, we get a little optimization by just putting the simpler lands first in the list manaSourcesInOrder.
-	def __init__(self, manaDatabase, manaSourcesBetterThan, manaSourcesInOrder):
+	def __init__(self, decklist):
+		# This function should take a decklist and go through all the manaproducers creating a small database and its helpers.
+		# For example, a Jeskai decklist might end up with the following manaDatabase:
+		# manaDatabase['Island'] = ['{U}']   (not the string {U}, but the ManaPool object)
+		# manaDatabase['Mountain'] = ['{R}']
+		# manaDatabase['Temple of Epiphany'] = ['{U}','{R}']
+		# manaDatabase['Flooded Strand'] = ['FetchU','FetchW']    (the string 'FetchU')
+		# However, green decks might have mana dorks, so they and manarocks will live in here too:
+		# manaDatabase['Elvish Mystic'] = ['{G}']
+		# manaDatabase['Sol Ring'] = ['{2}']
+
+		if debug['parseMana']: print('')
+		if debug['parseMana']: print('Beginning Mana Parser.')
+
+		manaDatabase = {}
+
+		# Every lands database needs some basic lands.
+		manaDatabase['Island'] = [ManaPool('{U}')]
+		manaDatabase['Mountain'] = [ManaPool('{R}')]
+		manaDatabase['Swamp'] = [ManaPool('{B}')]
+		manaDatabase['Forest'] = [ManaPool('{G}')]
+		manaDatabase['Plains'] = [ManaPool('{W}')]
+
+		for card in decklist:
+			if isLand(card) and card not in manaDatabase:
+				if debug['parseMana']: print('Parsing land:',card)
+				manaDatabase[card] = []
+				if 'text' in cardDatabase[card]:
+					# Parse through the text looking for mana symbols. We don't want to start counting until after the tap symbol (see Nykthos, Shrine to Nyx).
+					# When we get to a { we start a new symbol; a } ends it.
+					currentsymbol = ''
+					flagAfterTapSymbol = False
+					for char in cardDatabase[card]['text']:
+						if char =='{':
+							currentsymbol = '{'
+						elif char == '}':
+							# After we get to the tap symbol, it's time to start adding to the list.
+							if currentsymbol == '{T':
+								flagAfterTapSymbol = True
+							elif currentsymbol == '{1':
+								# Every land is currently assumed to tap for {1}, so skip it
+								pass
+							elif flagAfterTapSymbol:
+								manaDatabase[card].append(ManaPool(currentsymbol+char))
+						elif char == '.':
+							# Again, see the two tap symbols in Nykthos for why this is here. Many lands have multiple sentences, which are separate abilities.
+							flagAfterTapSymbol = False
+						else:
+							# This is useful if the mana cost is 15, so we don't end up adding 6 to the mana cost.
+							currentsymbol += char
+					# Parse through the text looking for "scry" or "fetch."
+					if 'scry' in cardDatabase[card]['text']:
+						manaDatabase[card].append('scry')
+					# This mana confluence catcher is definitely going to cause some false positives; TODO
+					if 'any color' in cardDatabase[card]['text']:
+						manaDatabase[card].append(ManaPool('{W}'))
+						manaDatabase[card].append(ManaPool('{U}'))
+						manaDatabase[card].append(ManaPool('{R}'))
+						manaDatabase[card].append(ManaPool('{B}'))
+						manaDatabase[card].append(ManaPool('{G}'))
+					if 'Search your library' in  cardDatabase[card]['text']:
+						if 'Plains' in cardDatabase[card]['text']:
+							manaDatabase[card].append('FetchW')
+						if 'Swamp' in cardDatabase[card]['text']:
+							manaDatabase[card].append('FetchB')
+						if 'Mountain' in cardDatabase[card]['text']:
+							manaDatabase[card].append('FetchR')
+						if 'Island' in cardDatabase[card]['text']:
+							manaDatabase[card].append('FetchU')
+						if 'Forest' in cardDatabase[card]['text']:
+							manaDatabase[card].append('FetchG')
+						if 'basic land card' in cardDatabase[card]['text']:
+							manaDatabase[card].append('FetchBasic')
+				if debug['parseMana']: print('Parsed as ',manaDatabase[card])
+			elif card not in manaDatabase:
+				# Okay, we're going to try to find all the mana dorks or manarocks.
+				if debug['parseMana']: print('Parsing nonland card:',card)
+				if 'text' in cardDatabase[card]:
+					# Manadorks and rocks should have these phrases:
+					if '{T}: Add' in cardDatabase[card]['text'] and 'to your mana pool' in cardDatabase[card]['text']:
+						# Start one character after "{T}: Add" and go up to "to your mana pool" and see what we get.
+						manaDatabase[card] = []
+						startLocation = cardDatabase[card]['text'].index('{T}: Add') + 9
+						endLocation = cardDatabase[card]['text'].index('to your mana pool') - 1
+						manaToParse = cardDatabase[card]['text'][startLocation:endLocation]
+						if debug['parseMana']: print(card,'appears to be a mana producer; now parsing the string "',manaToParse,'"')
+						# Split the mana phrase into parts, so Sylvan Caryatid gets ['one','mana','of','any','color'] and Noble Hierarch is ['{G}','{W}','or','{U}']
+						for symbol in manaToParse.split():
+							# This implementation creates false positive on "of any color that lands you control could produce" type cards; not sure there are any nonland cards that do this.
+							if symbol == 'any':
+								manaDatabase[card].append(ManaPool('{W}'))
+								manaDatabase[card].append(ManaPool('{U}'))
+								manaDatabase[card].append(ManaPool('{R}'))
+								manaDatabase[card].append(ManaPool('{B}'))
+								manaDatabase[card].append(ManaPool('{G}'))
+							else:
+								# If you pass nonsense to ManaPool, like '{H}', it doesn't error; it just gives you back 0 mana.
+								mana = ManaPool(symbol)
+								if mana != ManaPool('{0}'):
+									manaDatabase[card].append(ManaPool(symbol))
+						if debug['parseMana']: print('Parsed as ',manaDatabase[card])
+
+
+		# Okay, now comes the mathy part. Suppose you are trying to cast Savage Knuckleblade (cost: RUG) and you have the following lands:
+		# Sylvan Caryatid, Mana Confluence, Forest
+		# The way a human handles this issue is they say "aha -- the Forest is only useful for Green, so I better tap the Forest for green and the others for something else."
+		# The key optimization idea here is that if we need a green mana, we try using Forest for it, and we can't cast the spell, then there is no use trying to use Mana Confluence for the green.
+		# We will use what is called a "topological sort" of the lands to stratify things this way. For example, in a deck with lots of weird lands, you might have:
+		# Forest, Yavimaya Coast, Frontier Bivouac, Sandsteppe Citadel, Sylvan Caryatid.
+		# With respect to green, these can be topologically sorted as follows: [Forest], [Yavimaya Coast, Sandsteppe Citadel], [Frontier Bivouac], [Sylvan Caryatid].
+		# This means that if you have a land from one of the lists, you tried tapping it for green and everything still failed, then there is no use trying anything from a later list.
+
+		# At the end of this, we will build a partial ordering of all the mana producers in the deck. This will allow us to choose mana sources intelligently in the future.
+
+		def secondManaSourceIsBetter(card1,card2):
+			coloredManaSymbols = ['{W}','{U}','{B}','{R}','{G}']
+			# the second mana source is better if its set of colored mana symbols is strictly larger.
+			symbolsInCard1 = [symbol for symbol in coloredManaSymbols if (ManaPool(symbol) in manaDatabase[card1])]
+			symbolsInCard2 = [symbol for symbol in coloredManaSymbols if (ManaPool(symbol) in manaDatabase[card2])]
+			# The second list of symbols is strictly larger if everything in #2 is in #1, and something in #2 is not in #1.
+			return (all([symbol in symbolsInCard2 for symbol in symbolsInCard1]) and any([symbol not in symbolsInCard1 for symbol in symbolsInCard2]))
+
+		manaSourcesBetterThan = {}
+		for card in manaDatabase:
+			# Just make a list of all the othercards that are better than card.
+			manaSourcesBetterThan[card] = set([othercard for othercard in manaDatabase if secondManaSourceIsBetter(card,othercard)])
+
+		if debug['parseMana']: print('End of Mana Parser. Results below:')
+		if debug['parseMana']: print('     Mana Database:',manaDatabase)
+		if debug['parseMana']: print('Mana Partial Order:',manaSourcesBetterThan)
+
+		# Then we can create a topological sort of the mana sources. This is an order to try the lands in.
+		toposorted = toposort(manaSourcesBetterThan)
+		# toposorted is a list of sets. We want to concatenate them into a list, and we don't care about the order inside the sets.
+		manaSourcesInOrder = []
+		for cohortofcards in toposorted:
+			for card in cohortofcards:
+				manaSourcesInOrder.append(card)
+		manaSourcesInOrder.reverse()
+
+		if debug['parseMana']: print('Order to try Lands:',manaSourcesInOrder)
+		if debug['parseMana']: print('')
+
 		self.manaDatabase = manaDatabase
-		self.manaSourcesBetterThan = manaSourcesBetterThan	
+		self.manaSourcesBetterThan = manaSourcesBetterThan
 		self.manaSourcesInOrder = manaSourcesInOrder
 
 def manaSourcesAvailable(lineofplay, manaBase):
-	# In a certain line of play, we want to know which combination of mana is available. New lands and summoning-sick guys aren't available.
+	"""Given a line of play and a manabase, we want to know which mana
+	sources are available to tap for mana. The lineofplay knows which
+	turn each land and spell was played, while the manaBase knows
+	whether those lands and spells are actually mana producers.
+	This function uses the global cardDatabase to look at card text.
+	Inputs are a LineOfPlay object and a ManaBase object. Output is
+	a list of card names that can be used for mana this turn.
+	"""
 
 	# Make a list of available cards (so we dont count tapped lands on the turn they come out and don't count summoning-sick dudes.)
 	availablecards = []
@@ -120,13 +269,13 @@ def toposort(data):
 	dependences, each subsequent set consists of items that depend upon
 	items in the preceeding sets.
 
-	>>> print '\\n'.join(repr(sorted(x)) for x in toposort({
+	>>> print('\\n'.join(repr(sorted(x)) for x in toposort({
 	...     2: set([11]),
 	...     9: set([11,8]),
 	...     10: set([11,3]),
 	...     11: set([7,5]),
 	...     8: set([7,3]),
-	...     }) )
+	...     }) ))
 	[3, 5, 7]
 	[8, 11]
 	[2, 9, 10]
@@ -155,153 +304,6 @@ def toposort(data):
 	                if item not in ordered}
 	# if it loops around and everything gets destroyed, then we have a cyclic dependency.
 	assert not data, "Cyclic dependencies exist among these items:\n%s" % '\n'.join(repr(x) for x in data.items())
-
-def parseMana(decklist):
-	# This function should take a decklist and go through all the manaproducers creating a small database.
-	# For example, a Jeskai decklist might end up with the following manaDatabase:
-	# manaDatabase['Island'] = ['{U}']   (not the string {U}, but the ManaPool object)
-	# manaDatabase['Mountain'] = ['{R}']
-	# manaDatabase['Temple of Epiphany'] = ['{U}','{R}']
-	# manaDatabase['Flooded Strand'] = ['FetchU','FetchW']    (the string 'FetchU')
-	# However, green decks might have mana dorks, so they and manarocks will live in here too:
-	# manaDatabase['Elvish Mystic'] = ['{G}']
-	# manaDatabase['Sol Ring'] = ['{2}']
-
-	if debug['parseMana']: print('')
-	if debug['parseMana']: print('Beginning Mana Parser.')
-
-	manaDatabase = {}
-
-	# Every lands database needs some basic lands.
-	manaDatabase['Island'] = [ManaPool('{U}')]
-	manaDatabase['Mountain'] = [ManaPool('{R}')]
-	manaDatabase['Swamp'] = [ManaPool('{B}')]
-	manaDatabase['Forest'] = [ManaPool('{G}')]
-	manaDatabase['Plains'] = [ManaPool('{W}')]
-
-	for card in decklist:
-		if isLand(card) and card not in manaDatabase:
-			if debug['parseMana']: print('Parsing land:',card)
-			manaDatabase[card] = []
-			if 'text' in cardDatabase[card]:
-				# Parse through the text looking for mana symbols. We don't want to start counting until after the tap symbol (see Nykthos, Shrine to Nyx).
-				# When we get to a { we start a new symbol; a } ends it.
-				currentsymbol = ''
-				flagAfterTapSymbol = False
-				for char in cardDatabase[card]['text']:
-					if char =='{':
-						currentsymbol = '{'
-					elif char == '}':
-						# After we get to the tap symbol, it's time to start adding to the list.
-						if currentsymbol == '{T':
-							flagAfterTapSymbol = True
-						elif currentsymbol == '{1':
-							# Every land is currently assumed to tap for {1}, so skip it
-							pass
-						elif flagAfterTapSymbol:
-							manaDatabase[card].append(ManaPool(currentsymbol+char))
-					elif char == '.':
-						# Again, see the two tap symbols in Nykthos for why this is here. Many lands have multiple sentences, which are separate abilities.
-						flagAfterTapSymbol = False
-					else:
-						# This is useful if the mana cost is 15, so we don't end up adding 6 to the mana cost.
-						currentsymbol += char
-				# Parse through the text looking for "scry" or "fetch."
-				if 'scry' in cardDatabase[card]['text']:
-					manaDatabase[card].append('scry')
-				# This mana confluence catcher is definitely going to cause some false positives; TODO
-				if 'any color' in cardDatabase[card]['text']:
-					manaDatabase[card].append(ManaPool('{W}'))
-					manaDatabase[card].append(ManaPool('{U}'))
-					manaDatabase[card].append(ManaPool('{R}'))
-					manaDatabase[card].append(ManaPool('{B}'))
-					manaDatabase[card].append(ManaPool('{G}'))
-				if 'Search your library' in  cardDatabase[card]['text']:
-					if 'Plains' in cardDatabase[card]['text']:
-						manaDatabase[card].append('FetchW')
-					if 'Swamp' in cardDatabase[card]['text']:
-						manaDatabase[card].append('FetchB')
-					if 'Mountain' in cardDatabase[card]['text']:
-						manaDatabase[card].append('FetchR')
-					if 'Island' in cardDatabase[card]['text']:
-						manaDatabase[card].append('FetchU')
-					if 'Forest' in cardDatabase[card]['text']:
-						manaDatabase[card].append('FetchG')
-					if 'basic land card' in cardDatabase[card]['text']:
-						manaDatabase[card].append('FetchBasic')
-			if debug['parseMana']: print('Parsed as ',manaDatabase[card])
-		elif card not in manaDatabase:
-			# Okay, we're going to try to find all the mana dorks or manarocks.
-			if debug['parseMana']: print('Parsing nonland card:',card)
-			if 'text' in cardDatabase[card]:
-				# Manadorks and rocks should have these phrases:
-				if '{T}: Add' in cardDatabase[card]['text'] and 'to your mana pool' in cardDatabase[card]['text']:
-					# Start one character after "{T}: Add" and go up to "to your mana pool" and see what we get.
-					manaDatabase[card] = []
-					startLocation = cardDatabase[card]['text'].index('{T}: Add') + 9
-					endLocation = cardDatabase[card]['text'].index('to your mana pool') - 1
-					manaToParse = cardDatabase[card]['text'][startLocation:endLocation]
-					if debug['parseMana']: print(card,'appears to be a mana producer; now parsing the string "',manaToParse,'"')
-					# Split the mana phrase into parts, so Sylvan Caryatid gets ['one','mana','of','any','color'] and Noble Hierarch is ['{G}','{W}','or','{U}']
-					for symbol in manaToParse.split():
-						# This implementation creates false positive on "of any color that lands you control could produce" type cards; not sure there are any nonland cards that do this.
-						if symbol == 'any':
-							manaDatabase[card].append(ManaPool('{W}'))
-							manaDatabase[card].append(ManaPool('{U}'))
-							manaDatabase[card].append(ManaPool('{R}'))
-							manaDatabase[card].append(ManaPool('{B}'))
-							manaDatabase[card].append(ManaPool('{G}'))
-						else:
-							# If you pass nonsense to ManaPool, like '{H}', it doesn't error; it just gives you back 0 mana.
-							mana = ManaPool(symbol)
-							if mana != ManaPool('{0}'):
-								manaDatabase[card].append(ManaPool(symbol))
-					if debug['parseMana']: print('Parsed as ',manaDatabase[card])
-
-
-	# Okay, now comes the mathy part. Suppose you are trying to cast Savage Knuckleblade (cost: RUG) and you have the following lands:
-	# Sylvan Caryatid, Mana Confluence, Forest
-	# The way a human handles this issue is they say "aha -- the Forest is only useful for Green, so I better tap the Forest for green and the others for something else."
-	# The key optimization idea here is that if we need a green mana, we try using Forest for it, and we can't cast the spell, then there is no use trying to use Mana Confluence for the green.
-	# We will use what is called a "topological sort" of the lands to stratify things this way. For example, in a deck with lots of weird lands, you might have:
-	# Forest, Yavimaya Coast, Frontier Bivouac, Sandsteppe Citadel, Sylvan Caryatid.
-	# With respect to green, these can be topologically sorted as follows: [Forest], [Yavimaya Coast, Sandsteppe Citadel], [Frontier Bivouac], [Sylvan Caryatid].
-	# This means that if you have a land from one of the lists, you tried tapping it for green and everything still failed, then there is no use trying anything from a later list.
-
-	# At the end of this, we will build a partial ordering of all the mana producers in the deck. This will allow us to choose mana sources intelligently in the future.
-
-	def secondManaSourceIsBetter(card1,card2):
-		coloredManaSymbols = ['{W}','{U}','{B}','{R}','{G}']
-		# the second mana source is better if its set of colored mana symbols is strictly larger.
-		symbolsInCard1 = [symbol for symbol in coloredManaSymbols if (ManaPool(symbol) in manaDatabase[card1])]
-		symbolsInCard2 = [symbol for symbol in coloredManaSymbols if (ManaPool(symbol) in manaDatabase[card2])]
-		# The second list of symbols is strictly larger if everything in #2 is in #1, and something in #2 is not in #1.
-		return (all([symbol in symbolsInCard2 for symbol in symbolsInCard1]) and any([symbol not in symbolsInCard1 for symbol in symbolsInCard2]))
-
-	manaSourcesBetterThan = {}
-	for card in manaDatabase:
-		# Just make a list of all the othercards that are better than card.
-		manaSourcesBetterThan[card] = set([othercard for othercard in manaDatabase if secondManaSourceIsBetter(card,othercard)])
-
-	if debug['parseMana']: print('End of Mana Parser. Results below:')
-	if debug['parseMana']: print('     Mana Database:',manaDatabase)
-	if debug['parseMana']: print('Mana Partial Order:',manaSourcesBetterThan)
-
-	# Then we can create a topological sort of the mana sources. This is an order to try the lands in.
-	toposorted = toposort(manaSourcesBetterThan)
-	# toposorted is a list of sets. We want to concatenate them into a list, and we don't care about the order inside the sets.
-	manaSourcesInOrder = []
-	for cohortofcards in toposorted:
-		for card in cohortofcards:
-			manaSourcesInOrder.append(card)
-	manaSourcesInOrder.reverse()
-
-	if debug['parseMana']: print('Order to try Lands:',manaSourcesInOrder)
-	if debug['parseMana']: print('')
-
-	parsedManaBase = ManaBase(manaDatabase, manaSourcesBetterThan, manaSourcesInOrder)
-
-	return parsedManaBase
 
 class ManaPool:
 	# A mana pool is really an object, for example 1U + 2UR = 3UUR.
@@ -420,22 +422,62 @@ class ManaPool:
 		return ((self.colorless >=0) and (self.blue >=0) and (self.green >= 0) and (self.white >= 0) and (self.black >= 0) and (self.red >= 0))
 
 def isLand(card):
-	# We just want to check whether this card is a land or not. "card" is a string, so we'll have to use it as the key in the dictionary.
-	return ('Land' in cardDatabase[card]['types'])
+	"""Takes a string, looks it up in the global card database, and sees 
+	if 'Land' is in its list of types. Returns boolean True/false.
+
+
+	>>> print(isLand('Dryad Arbor'))
+	True
+	>>> print(isLand('Birds of Paradise'))
+	False
+	>>> print(isLand('dRyAd ArBoR'))
+	False
+	"""
+	if card in cardDatabase:
+		return ('Land' in cardDatabase[card]['types'])
+	else:
+		return False
 
 def isCreature(card):
-	# We just want to check whether this card is a creature or not. "card" is a string, so we'll have to use it as the key in the dictionary.
-	return ('Creature' in cardDatabase[card]['types'])
+	"""Takes a string, looks it up in the global card database,	and sees 
+	if 'Creature' is in its list of types. Returns boolean True/false.
+
+	>>> print(isCreature('Dryad Arbor'))
+	True
+	>>> print(isCreature('Birds of Paradise'))
+	True
+	>>> print(isCreature('dRyAd ArBoR'))
+	False
+	"""
+	if card in cardDatabase:
+		return ('Creature' in cardDatabase[card]['types'])
+	else:
+		return False
 
 def is_int(s):
-	# I feel like Python probably had this function somewhere, but whatever.
-    try:
-        int(s)
-        return True
-    except ValueError:
-        return False
+	""" Takes any object, tries to convert it to int. Returns True if that
+	works, and False if we get a ValueError.
+
+	>>> print(is_int('-8'))
+	True
+	>>> print(is_int('-8.0'))
+	False
+	"""
+	try:
+		int(s)
+		return True
+	except ValueError:
+		return False
 
 def landCountInHand(lineofplay):
+	"""Takes a LineOfPlay object as input and counts how many lands are in it.
+	Uses isLand() to look at the global card database.
+
+	>>> print(landCountInHand(LineOfPlay([['Forest','Elvish Mystic']],['Mountain','Sol Ring','Griselbrand'],['Swamp','Swamp','Swamp'])))
+	1
+	>>> print(landCountInHand(LineOfPlay([['Forest','Elvish Mystic']],['Mountain','Dryad Arbor','Griselbrand'],['Swamp','Swamp','Swamp'])))
+	2
+	"""
 	hand = lineofplay.hand
 	landsinhand = 0
 	for card in hand:
@@ -443,11 +485,21 @@ def landCountInHand(lineofplay):
 			landsinhand += 1
 	return landsinhand
 
-def spacing(lineofplay):
-	# For slow mode, we want to display some information at the start of each printed line.
+def spacing(lineofplay, lineOfPlayCounter):
+	"""Provides the spacing to put before text that is printed for the user during
+	slowmode. The primary purpose of this is to provide indentation so that 
+	the branching tree of lines of play is not completely impossible to follow.
+
+	>>> print(spacing(LineOfPlay([['Forest','Elvish Mystic'],['Swamp']],['Mountain','Sol Ring','Griselbrand'],['Swamp','Swamp','Swamp']), 143))
+	line  143: |  |  
+	"""
 	return 'line'+format(lineOfPlayCounter,'>5')+': '+'|  '*lineofplay.turn()
 
-def continuePlaying(lineofplay,manaBase,drawacard,spellsthistrial,caststhistrial):
+def continuePlaying(lineofplay,manaBase,drawacard,spellsthistrial,caststhistrial,lineOfPlayCounter,maxturns):
+	"""Given a line of play, a mana base, whether we should open by drawing a card,
+	and the data of how this trial has gone so far, this function plays one more turn.
+	It returns the new lineOfPlayCounter.
+	"""
 	# Okay; this is the core of the program. To "continue playing" a line of play,
 	# you need to first draw a card, then look at all the lands you could play
 	# and all the choices you could make from playing those lands. For each of those
@@ -455,7 +507,6 @@ def continuePlaying(lineofplay,manaBase,drawacard,spellsthistrial,caststhistrial
 	# continuePlaying() from there. This creates a recursive tree of lines of play
 	# which is only stopped by the maxturns number at the top of the program.
 	# I highly recommend low values of maxturns.
-	global lineOfPlayCounter
 	global slowMode
 	global slowModeWait
 
@@ -463,14 +514,16 @@ def continuePlaying(lineofplay,manaBase,drawacard,spellsthistrial,caststhistrial
 	manaDatabase = manaBase.manaDatabase
 
 	if slowMode: 
-		print(spacing(lineofplay)+'Now starting turn',lineofplay.turn()+1,'with hand:',lineofplay.hand)
+		print(spacing(lineofplay, lineOfPlayCounter)+'Now starting turn',lineofplay.turn()+1,'with hand:',lineofplay.hand)
 		if slowModeWait.lower() == 'skip':
-			print(spacing(lineofplay)+'Our plays so far have been '+str(lineofplay.plays))
+			print(spacing(lineofplay, lineOfPlayCounter)+'Our plays so far have been '+str(lineofplay.plays))
 		else:
-			slowModeWait = input(spacing(lineofplay)+'[Enter] to continue or "skip" to be done. Our plays so far have been '+str(lineofplay.plays))
+			slowModeWait = input(spacing(lineofplay, lineOfPlayCounter)+'[Enter] to continue or "skip" to be done. Our plays so far have been '+str(lineofplay.plays))
 
 	# Start by drawing a card, if we are supposed to.
-	if drawacard: lineofplay.draw_card()
+	if drawacard: 
+		carddrawn = lineofplay.draw_card()
+		if slowMode: print(spacing(lineofplay,lineOfPlayCounter)+'Drew a card:',carddrawn)
 
 	# Make a list of lands in the hand.
 	landstotry = [card for card in lineofplay.hand if isLand(card)]
@@ -511,7 +564,7 @@ def continuePlaying(lineofplay,manaBase,drawacard,spellsthistrial,caststhistrial
 							if fetch[1] in cardDatabase[target][fetch[0]]:
 								fetchtargets[target] = i
 
-				if slowMode: print(spacing(lineofplay)+'It\'s a fetch with possible fetch targets',fetchtargets)
+				if slowMode: print(spacing(lineofplay, lineOfPlayCounter)+'It\'s a fetch with possible fetch targets',fetchtargets)
 
 				for target in fetchtargets:
 					newlineofplay = deepcopy(lineofplay)
@@ -527,15 +580,15 @@ def continuePlaying(lineofplay,manaBase,drawacard,spellsthistrial,caststhistrial
 					# One thing: we need to tell castSpells that it should not use the Evolving Wilds lands this turn.
 					if 'FetchBasic' in manaDatabase[card]:
 						lineOfPlayCounter += 1
-						if slowMode: print(spacing(lineofplay)+'Trying',card,'fetching a tapped '+target+' as our turn '+str(lineofplay.turn()+1)+' land drop, looking for spells to cast...')
-						castSpells(newlineofplay, manaBase, False, spellsthistrial,caststhistrial)
+						if slowMode: print(spacing(lineofplay, lineOfPlayCounter)+'Trying',card,'fetching a tapped '+target+' as our turn '+str(lineofplay.turn()+1)+' land drop, looking for spells to cast...')
+						lineOfPlayCounter = castSpells(newlineofplay, manaBase, False, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
 					else:
 						lineOfPlayCounter += 1
-						if slowMode: print(spacing(lineofplay)+'Trying',card,'fetching a '+target+' as our turn '+str(lineofplay.turn()+1)+' land drop, looking for spells to cast...')
-						castSpells(newlineofplay, manaBase, True, spellsthistrial,caststhistrial)	
+						if slowMode: print(spacing(lineofplay, lineOfPlayCounter)+'Trying',card,'fetching a '+target+' as our turn '+str(lineofplay.turn()+1)+' land drop, looking for spells to cast...')
+						lineOfPlayCounter = castSpells(newlineofplay, manaBase, True, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)	
 			else:
 				lineOfPlayCounter += 1
-				if slowMode: print(spacing(lineofplay)+'Trying',card,'as our turn '+str(lineofplay.turn()+1)+' land drop, looking for spells to cast...')
+				if slowMode: print(spacing(lineofplay, lineOfPlayCounter)+'Trying',card,'as our turn '+str(lineofplay.turn()+1)+' land drop, looking for spells to cast...')
 
 				# Playing a non-fetchland is much easier.
 				newlineofplay = deepcopy(lineofplay)
@@ -543,7 +596,7 @@ def continuePlaying(lineofplay,manaBase,drawacard,spellsthistrial,caststhistrial
 				i = newlineofplay.hand.index(card)
 				newlineofplay.plays.append([newlineofplay.hand.pop(i)])
 				# Check if anything is castable and cast it -- this increments caststhisturn and makes new lines of play for spells we know how to handle.
-				castSpells(newlineofplay, manaBase, True, spellsthistrial,caststhistrial)
+				lineOfPlayCounter = castSpells(newlineofplay, manaBase, True, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
 
 				# If we just played a scryland, then we need to scry to the bottom and cast spells. We only care about this if there are turns left.
 				# Here, a land for turn has already been played, so if turn() is 4 and maxturns is 4, we actually don't want to play another turn.
@@ -555,23 +608,24 @@ def continuePlaying(lineofplay,manaBase,drawacard,spellsthistrial,caststhistrial
 						# However, we should definitely bottom the top card before continuing.
 						newlineofplay2.deck = newlineofplay.deck[1:] + newlineofplay.deck[:1]
 						lineOfPlayCounter += 1
-						if slowMode: print(spacing(newlineofplay2)+'   We\'ll also make a line of play where we scry to the bottom.')
-						castSpells(newlineofplay2, manaBase, True, spellsthistrial,caststhistrial)
+						if slowMode: print(spacing(newlineofplay2, lineOfPlayCounter)+'   We\'ll also make a line of play where we scry to the bottom.')
+						lineOfPlayCounter = castSpells(newlineofplay2, manaBase, True, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
 
 	else:
 		# All the spells were already cast, so just keep going on to later turns by not playing a land here.
 
-		if slowMode: print(spacing(lineofplay)+'Not making a land drop this turn (either because we don\'t have one, or because we don\'t need to)')
+		if slowMode: print(spacing(lineofplay, lineOfPlayCounter)+'Not making a land drop this turn (either because we don\'t have one, or because we don\'t need to)')
 		# Also remember to continue this line of play (where you didn't play a land this turn).
 		lineofplay.plays.append([])
 		# Check if anything is castable and cast it -- this increments caststhisturn and makes new lines of play for spells we know how to handle, then continues playing.
-		castSpells(lineofplay, manaBase, True, spellsthistrial,caststhistrial)
+		lineOfPlayCounter = castSpells(lineofplay, manaBase, True, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
 
-def castSpells(lineofplay, manaBase, useThisTurnsLands, spellsthistrial, caststhistrial):
+	return lineOfPlayCounter
+
+def castSpells(lineofplay, manaBase, useThisTurnsLands, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns):
 	# This function is called when we have a line of play where the current turn has its land played, but the "Casts" have not been updated.
-	global lineOfPlayCounter
 
-	spellsToCast = checkCastable(lineofplay, manaBase, useThisTurnsLands, spellsthistrial,caststhistrial)
+	spellsToCast = checkCastable(lineofplay, manaBase, useThisTurnsLands, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
 	weCouldNotCastAnything = True
 
 	manaDatabase = manaBase.manaDatabase
@@ -589,13 +643,15 @@ def castSpells(lineofplay, manaBase, useThisTurnsLands, spellsthistrial, caststh
 			# Here, a land for turn has already been played, so if turn() is 4 and maxturns is 4, we actually don't want to play another turn.
 			if newlineofplay.turn() < maxturns:
 				lineOfPlayCounter += 1
-				if slowMode: print(spacing(newlineofplay)+'Making a line of play where we cast',spell,'and remember we cast it.')
-				continuePlaying(newlineofplay,manaBase,True,spellsthistrial,caststhistrial)
+				if slowMode: print(spacing(newlineofplay, lineOfPlayCounter)+'Making a line of play where we cast',spell,'and remember we cast it.')
+				lineOfPlayCounter = continuePlaying(newlineofplay, manaBase, True, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
 	if weCouldNotCastAnything:
 		# Keep going without casting anything ONLY if it was impossible to cast something. This implementation means we always cast a mana guy if we can.
 		# Here, a land for turn has already been played, so if turn() is 4 and maxturns is 4, we actually don't want to play another turn.
 		if lineofplay.turn() < maxturns:
-			continuePlaying(lineofplay,manaBase,True,spellsthistrial,caststhistrial)
+			lineOfPlayCounter = continuePlaying(lineofplay, manaBase, True, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
+
+	return lineOfPlayCounter
 
 def checkManaAvailability(symbolsToAcquire, manaBase, manaSourcesAvailable):
 	if debug['checkManaAvailability']: print('         Trying to acquire',symbolsToAcquire,'with',manaSourcesAvailable)
@@ -656,7 +712,7 @@ def checkManaAvailability(symbolsToAcquire, manaBase, manaSourcesAvailable):
 		if debug['checkManaAvailability']: print('         Failure! We couldnt get',symbolsToAcquire,'from',manaSourcesAvailable)		
 		return False
 
-def checkCastable(lineofplay, manaBase, useThisTurnsLands, spellsthistrial, caststhistrial):
+def checkCastable(lineofplay, manaBase, useThisTurnsLands, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns):
 	# We will return the spells that we could have cast, in case castSpells needs to make more lines of play out of them.
 	spellsToCast = []
 	turn = lineofplay.turn()
@@ -696,16 +752,16 @@ def checkCastable(lineofplay, manaBase, useThisTurnsLands, spellsthistrial, cast
 		isCastable = checkManaAvailability(symbolsToAcquire, manaBase, manaSources)
 
 		if isCastable:
-			if slowMode: print(spacing(lineofplay)+'Successfully paid cost for',card,'... we found',manaCost,'in', manaSources,'on turn'+str(turn)+'.')
+			if slowMode: print(spacing(lineofplay, lineOfPlayCounter)+'Successfully paid cost for',card,'... we found',manaCost,'in', manaSources,'on turn'+str(turn)+'.')
 			# If the mana is doable, let's make sure we don't have any other requirements, like Chained to the Rocks:
 			if card == 'Chained to the Rocks':
-				if slowMode: print(spacing(lineofplay)+'Well, the mana is okay, but there are other requirements to check for '+card+'.')
+				if slowMode: print(spacing(lineofplay, lineOfPlayCounter)+'Well, the mana is okay, but there are other requirements to check for '+card+'.')
 				haveMountain = 0
 				for play in lineofplay.plays:
 					for card2 in play:  # Technically an Elvish Mystic might be in here, but it's okay; I guess if we cast a Mountain somehow you could Chain to it.
 						if 'subtypes' in cardDatabase[card2]:
 							if 'Mountain' in cardDatabase[card2]['subtypes']:
-								if slowMode: print(spacing(lineofplay)+'We successfully cast a turn '+str(turn)+' '+card+'.')
+								if slowMode: print(spacing(lineofplay, lineOfPlayCounter)+'We successfully cast a turn '+str(turn)+' '+card+'.')
 								# Okay, it's cool that the spell was castable, but if it isn't in our hand anymore, we don't want to return it.
 								if card in lineofplay.hand: spellsToCast.append(card)
 								# Again: only count spells that were in our opening hand.
@@ -714,7 +770,7 @@ def checkCastable(lineofplay, manaBase, useThisTurnsLands, spellsthistrial, cast
 										caststhistrial[i-1][card] = 1
 			else:
 				# We aren't incrementing this; it is a flag 0 or 1.
-				if slowMode: print(spacing(lineofplay)+'We successfully cast a turn '+str(turn)+' '+card+'.')
+				if slowMode: print(spacing(lineofplay, lineOfPlayCounter)+'We successfully cast a turn '+str(turn)+' '+card+'.')
 				# Okay, it's cool that the spell was castable, but if it isn't in our hand anymore, we don't want to return it.
 				if card in lineofplay.hand: spellsToCast.append(card)
 				# Again: only count spells that were in our opening hand. 
@@ -769,7 +825,7 @@ def parseDecklist(deckfile):
 
 	return deck, decklist
 
-def drawHand(handsize, deck):
+def drawHand(handsize, deck, lineOfPlayCounter):
 	# This function draws a hand of handsize cards.
 	# Shuffle the deck. TODO: Is random.sample good enough? I'm not sure actually.
 	currentdeck = random.sample(deck, len(deck))
@@ -778,16 +834,19 @@ def drawHand(handsize, deck):
 
 	# Draw an initial hand.
 	for i in range(handsize):
-		lineofplay.draw_card()
+		carddrawn = lineofplay.draw_card()
+		if slowMode: print(spacing(lineofplay,lineOfPlayCounter)+'Drew a card:',carddrawn)
+
 
 	return lineofplay
 
-def playHand(lineofplay, manaBase):
+def playHand(lineofplay, manaBase, maxturns):
 	# In this trial, we only care about how many times we cast the spells in the opening hand.
 	# spellsthistrial is the list of spells we care about.
 	# caststhistrial[0] is a dictionary with keys: spells in this opening hand, values:0 or 1, whether we cast it or not on Turn 1.
 	# caststhistrial[1] is a dictionary with keys: spells in this opening hand, values:0 or 1, whether we cast it or not on Turn 2.
 	# etc, up to maxturns.
+	global slowMode
 	global slowModeWait
 
 	spellsthistrial = []
@@ -823,7 +882,8 @@ def playHand(lineofplay, manaBase):
 
 	# Continue playing. During "continue playing," we check whether cards are playable and set caststhistrial to 1 when possible.
 	# If we are on the draw, we tell continuePlaying to start the turn by drawing a card, otherwise not.
-	continuePlaying(lineofplay,manaBase,onthedraw,spellsthistrial,caststhistrial)
+	lineOfPlayCounter = 0
+	lineOfPlayCounter = continuePlaying(lineofplay, manaBase, onthedraw, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
 
 	if slowMode:
 		print('')
@@ -1054,7 +1114,7 @@ def displayResults(displaycasts = None, displaydrawsdictionary = None, displaydr
 					# Only actually display the margin of error if it is at least 0.1% and if the statistics tells us this is even meaningful.
 					if 'text' in displayformat: percents[card] += ('+-' + '{:<6.1%}'.format(error))
 					if 'html' in displayformat: percents[card] += ('&plusmn;' + '{:.1%}'.format(error) + '</td>')
-				elif error < 0.001:
+				elif error < 0.0005:
 					# If we have the error down below .01, display nothing.
 					if 'text' in displayformat: percents[card] += '        '
 				else:
@@ -1217,8 +1277,6 @@ def runTrials(decksToRun, maxturns, trials, onthedraw, mulligans):
 	# If slowModeWait ever becomes "skip", then we will not wait for keyboard input anymore even in slowmode.
 	slowModeWait = ''
 
-	global lineOfPlayCounter
-
 	if trials is 1:
 		slowMode = True
 	else:
@@ -1236,7 +1294,7 @@ def runTrials(decksToRun, maxturns, trials, onthedraw, mulligans):
 
 		# We need to go through all the manaproducers in our deck and figure out what is going on with them.
 		# The manaDatabase is a dictionary that tells us what each land does. manaSourcesBetterThan tells us that Temple of Epiphany is better than Island. manaSourcesInOrder ranks the mana sources so we try them in an efficient order (i.e. tap Island for blue, not Opulent Palace).
-		manaBase = parseMana(decklist)
+		manaBase = ManaBase(decklist)
 
 		# We are going to be counting how many times we draw or cast each nonland card in the list. Starting off, we will want a 0 for each nonland card in the deck.
 		initialCount = {}
@@ -1271,19 +1329,19 @@ def runTrials(decksToRun, maxturns, trials, onthedraw, mulligans):
 				if trial % 100 == 0: print('Trial',trial,'of deck',deckname,'starting.')
 
 			# Start by drawing a hand of 7.
-			lineofplay = drawHand(7, deck)
+			lineofplay = drawHand(7, deck, lineOfPlayCounter)
 
 			# If we are considering mulligans, then we have to look at how many lands we have. This is Karsten's basic mulligan strategy for simulators.
 			if mulligans:
 				if landCountInHand(lineofplay) in [0,1,6,7]:
 					if slowMode: print('Mulligan hand of 7 cards since it has',landCountInHand(lineofplay),'lands:',lineofplay.hand)
-					lineofplay = drawHand(6, deck)
+					lineofplay = drawHand(6, deck, lineOfPlayCounter)
 					if landCountInHand(lineofplay) in [0,1,5,6]:
 						if slowMode: print('Mulligan hand of 6 cards since it has',landCountInHand(lineofplay),'lands:',lineofplay.hand)
-						lineofplay = drawHand(5, deck)
+						lineofplay = drawHand(5, deck, lineOfPlayCounter)
 						if landCountInHand(lineofplay) in [0,5]:
 							if slowMode:  print('Mulligan hand of 5 cards since it has',landCountInHand(lineofplay),'lands:',lineofplay.hand)
-							lineofplay = drawHand(4, deck)
+							lineofplay = drawHand(4, deck, lineOfPlayCounter)
 
 			# When we decide to keep a hand, keep track of how large the hand was that we kept.
 			handsize = len(lineofplay.hand)
@@ -1297,7 +1355,7 @@ def runTrials(decksToRun, maxturns, trials, onthedraw, mulligans):
 					slowModeWait = input('[Enter] to continue or "skip" to be done. The top of the deck looks like: '+str(lineofplay.deck[:maxturns+1]))
 				
 			# Okay, we've set up the line of play, now play it.
-			caststhistrial, spellsthistrial = playHand(lineofplay, manaBase)
+			caststhistrial, spellsthistrial = playHand(lineofplay, manaBase, maxturns)
 
 			# Go through the spells we drew and increment draws.
 			for spell in spellsthistrial:
@@ -1335,7 +1393,13 @@ debug['checkManaAvailability'] = False
 debug['storeResults'] = False
 
 
+if __name__ == "__main__":
+    import doctest
+    slowMode = False
+    doctest.testmod()
+
 while True:
 	decksToRun, maxturns, trials, onthedraw, mulligans = userInterface()
 	runTrials(decksToRun, maxturns, trials, onthedraw, mulligans)
 	print('')
+

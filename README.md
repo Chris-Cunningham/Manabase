@@ -15,11 +15,11 @@ Features
 * Aggregate results are stored over multiple sets of trials and can be output in text format or HTML files via a minimal user interface.
 * A simple mulligan strategy is implemented: 7-card hands with 0, 1, 6, or 7 lands are mulliganed. 6-card hands with 0, 1, 5, or 6 lands are mulliganed. 5-card hands with 0 or 5 lands are mulliganed.
 * Multicolored lands are handled properly. Fetchlands and scrylands decisions are implemented as lines of play.
-* The most common corner cases in Khans of Tarkir standard, namely Urborg, Tomb of Yawgmoth and Chained to the Rocks are handled appropriately. 
+* The most common corner cases in Khans of Tarkir standard, namely Urborg, Tomb of Yawgmoth, Chained to the Rocks, and Evolving Wilds, are handled appropriately. 
 * Mana abilities of cards like Elvish Mystic, Noble Hierarch, Sylvan Caryatid, and Abzan Banner are implemented, but mana abilities that have a cost (e.g. Signets) silently give wrong results.
+* A comprehensive battery of tests helps ensure that the results we get here are accurate.
 
 To-do
-* Finish the last battery of tests.
 * Implement Satyr Wayfinder.
 * Implement Courser of Kruphix.
 * Implement card draw spells.

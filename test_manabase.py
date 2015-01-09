@@ -218,6 +218,74 @@ class TestContinuePlaying(unittest.TestCase):
                                              [{'Wojek Halberdiers': 0, 'Cloudfin Raptor': 0},{'Wojek Halberdiers': 0, 'Cloudfin Raptor': 0}], 0, 2 #maxturns here at the end
                                            )[1][1], #turn number minus 1 here at the end
                            {'Wojek Halberdiers': 0, 'Cloudfin Raptor': 0} )
+    
+    def test_darksteel_citadel_is_in_the_manadatabase(self):
+        """Just making sure we know Citadel is a land."""
+        self.assertListEqual( ManaBase({'Darksteel Citadel': 1, 'Mountain': 1}).manaDatabase['Darksteel Citadel'],
+                            [] )
+
+    def test_darksteel_citadel_casts_something(self):
+        """Does Citadel actually cast a one-mana spell?"""
+        self.assertDictEqual(playHand(LineOfPlay([],['Darksteel Citadel','Altar of the Brood'],['']),
+                                      ManaBase({'Darksteel Citadel': 1,'Altar of the Brood': 1}),
+                                      1,       # maxturns here
+                                      False 
+                                     )[0][0], # turn number minus 1 here
+                             {'Altar of the Brood': 1} )
+
+    def test_darksteel_citadel_plays_with_others_turn_1(self):
+        """Does Citadel actually cast a two-mana spell?"""
+        self.assertDictEqual(playHand(LineOfPlay([],['Darksteel Citadel','Heir of the Wilds', 'Forest'],['Heir of the Wilds']),
+                                      ManaBase({'Darksteel Citadel': 1,'Heir of the Wilds': 2, 'Forest': 1}),
+                                      2,       # maxturns here
+                                      False 
+                                     )[0][0], # turn number minus 1 here
+                             {'Heir of the Wilds': 0} )
+
+    def test_darksteel_citadel_plays_with_others_turn_2(self):
+        """Does Citadel actually cast a two-mana spell?"""
+        self.assertDictEqual(playHand(LineOfPlay([],['Darksteel Citadel','Heir of the Wilds', 'Forest'],['Heir of the Wilds']),
+                                      ManaBase({'Darksteel Citadel': 1,'Heir of the Wilds': 2, 'Forest': 1}),
+                                      2,       # maxturns here
+                                      False 
+                                     )[0][1], # turn number minus 1 here
+                             {'Heir of the Wilds': 1} )
+
+    def test_darksteel_citadel_plays_with_rampers_turn_2(self):
+        """Does Citadel actually cast a two-mana spell?"""
+        self.assertDictEqual(playHand(LineOfPlay([],['Darksteel Citadel','Sylvan Caryatid', 'Forest','Polukranos, World Eater'],['Forest','Forest']),
+                                      ManaBase({'Darksteel Citadel': 1, 'Sylvan Caryatid': 1, 'Polukranos, World Eater': 1, 'Forest': 3}),
+                                      3,       # maxturns here
+                                      False 
+                                     )[0][1], # turn number minus 1 here
+                             {'Sylvan Caryatid': 1, 'Polukranos, World Eater': 0} )
+    
+    def test_darksteel_citadel_plays_with_rampers_turn_3(self):
+        """Does Citadel actually cast a two-mana spell?"""
+        self.assertDictEqual(playHand(LineOfPlay([],['Darksteel Citadel','Sylvan Caryatid', 'Forest','Polukranos, World Eater'],['Forest','Forest']),
+                                      ManaBase({'Darksteel Citadel': 1, 'Sylvan Caryatid': 1, 'Polukranos, World Eater': 1, 'Forest': 3}),
+                                      3,       # maxturns here
+                                      False 
+                                     )[0][2], # turn number minus 1 here
+                             {'Sylvan Caryatid': 1, 'Polukranos, World Eater': 1} )
+
+    def test_darksteel_citadel_plays_with_dorks_and_rocks_turn_3(self):
+        """Does Citadel play a ramp spell then also cast a 4-drop on turn 3?"""
+        self.assertDictEqual(playHand(LineOfPlay([],['Darksteel Citadel','Sylvan Caryatid', 'Forest','Polukranos, World Eater'],['Abzan Banner','Abzan Banner','Abzan Banner']),
+                                      ManaBase({'Darksteel Citadel': 1, 'Sylvan Caryatid': 1, 'Polukranos, World Eater': 1, 'Forest': 3, 'Abzan Banner': 3}),
+                                      4,       # maxturns here
+                                      False 
+                                     )[0][2], # turn number minus 1 here
+                             {'Sylvan Caryatid': 1, 'Polukranos, World Eater': 0} )
+
+    def test_darksteel_citadel_plays_with_dorks_and_rocks_turn_4(self):
+        """Does Citadel play a ramp spell then also cast a 4-drop on turn 3?"""
+        self.assertDictEqual(playHand(LineOfPlay([],['Darksteel Citadel','Sylvan Caryatid', 'Forest','Polukranos, World Eater'],['Abzan Banner','Abzan Banner','Abzan Banner']),
+                                      ManaBase({'Darksteel Citadel': 1, 'Sylvan Caryatid': 1, 'Polukranos, World Eater': 1, 'Forest': 3, 'Abzan Banner': 3}),
+                                      4,       # maxturns here
+                                      False 
+                                     )[0][3], # turn number minus 1 here
+                             {'Sylvan Caryatid': 1, 'Polukranos, World Eater': 1} )        
 
     def test_urborg_is_in_the_manadatabase(self):
         """Just making sure we know Urborg is a land."""
@@ -394,7 +462,7 @@ class TestContinuePlaying(unittest.TestCase):
                              {"Avacyn's Pilgrim": 1, 'Elvish Mystic': 1, 'Polukranos, World Eater': 0} )
 
     def test_use_at_least_one_of_two_manadorks(self):
-        """This line of play makes sure even if both mana dorks are possible on one, we don't cast both on one."""
+        """This line of play makes sure that if you have two mana dorks available, we don't get confused and not use them."""
         self.assertDictEqual(playHand(LineOfPlay([],['Forest',"Avacyn's Pilgrim",'Elvish Mystic','Forest','Polukranos, World Eater'],['Polukranos, World Eater','Polukranos, World Eater']),
                                       ManaBase({'Forest': 2, "Avacyn's Pilgrim": 1, 'Elvish Mystic': 1, 'Polukranos, World Eater': 3}),
                                       3,       # maxturns here
@@ -402,15 +470,347 @@ class TestContinuePlaying(unittest.TestCase):
                                      )[0][2], # turn number minus 1 here
                              {"Avacyn's Pilgrim": 1, 'Elvish Mystic': 1, 'Polukranos, World Eater': 1} )
 
-# To do: Mana Rocks
+    def test_mana_rocks_dont_make_every_color_turn_4(self):
+        """This line of play makes sure that Temur Banner doesn't tap for white mana."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Forest','Forest','Plains','Temur Banner','Wingmate Roc'],['Forest','Forest','Forest','Plains']),
+                                      ManaBase({'Forest': 5, 'Plains': 2, 'Wingmate Roc': 1, 'Temur Banner': 1}),
+                                      4,       # maxturns here
+                                      False 
+                                     )[0][3], # turn number minus 1 here
+                             {"Temur Banner": 1, 'Wingmate Roc': 0} )
 
-# To do: multicolored mana dorks
+    def test_mana_rocks_dont_make_every_color_turn_5(self):
+        """This line of play makes sure that even if Temur Banner is useless, it doesn't interfere with hardcasting Wingmate Roc."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Forest','Forest','Plains','Temur Banner','Wingmate Roc'],['Forest','Forest','Forest','Plains']),
+                                      ManaBase({'Forest': 5, 'Plains': 2, 'Wingmate Roc': 1, 'Temur Banner': 1}),
+                                      5,       # maxturns here
+                                      False 
+                                     )[0][4], # turn number minus 1 here
+                             {"Temur Banner": 1, 'Wingmate Roc': 1} )
 
-# To do: all-colored mana dorks
+    def test_mana_rocks_make_some_colors_turn_3(self):
+        """This line of play makes sure that Abzan Banner doesn't ramp before it should."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Forest','Forest','Plains','Abzan Banner','Wingmate Roc'],['Forest','Forest','Forest','Plains']),
+                                      ManaBase({'Forest': 5, 'Plains': 2, 'Wingmate Roc': 1, 'Abzan Banner': 1}),
+                                      3,       # maxturns here
+                                      False 
+                                     )[0][2], # turn number minus 1 here
+                             {"Abzan Banner": 1, 'Wingmate Roc': 0} )
 
-# To do: Chained to the rocks
+    def test_mana_rocks_make_some_colors_turn_4(self):
+        """This line of play makes sure that Abzan Banner does ramp with white mana."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Forest','Forest','Plains','Abzan Banner','Wingmate Roc'],['Forest','Forest','Forest','Plains']),
+                                      ManaBase({'Forest': 5, 'Plains': 2, 'Wingmate Roc': 1, 'Abzan Banner': 1}),
+                                      4,       # maxturns here
+                                      False 
+                                     )[0][3], # turn number minus 1 here
+                             {"Abzan Banner": 1, 'Wingmate Roc': 1} )
 
-# To do: Fetchlands
+    def test_mana_rocks_make_some_colors_turn_5(self):
+        """This line of play should just hardcast Wingmate Roc no problem."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Forest','Forest','Plains','Abzan Banner','Wingmate Roc'],['Forest','Forest','Forest','Plains']),
+                                      ManaBase({'Forest': 5, 'Plains': 2, 'Wingmate Roc': 1, 'Abzan Banner': 1}),
+                                      5,       # maxturns here
+                                      False 
+                                     )[0][4], # turn number minus 1 here
+                             {"Abzan Banner": 1, 'Wingmate Roc': 1} )
+
+    def test_mana_rocks_dont_instantly_ramp_turn_2(self):
+        """This line of play makes sure that Abzan Banner isn't cast yet on turn 2."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Forest','Forest','Forest','Abzan Banner','Karametra, God of Harvests', 'Polukranos, World Eater'],['Forest','Forest','Forest']),
+                                      ManaBase({'Forest': 6, 'Abzan Banner': 1, 'Karametra, God of Harvests': 1, 'Polukranos, World Eater': 1}),
+                                      2,       # maxturns here
+                                      False 
+                                     )[0][1], # turn number minus 1 here
+                             {"Abzan Banner": 0, 'Karametra, God of Harvests': 0, 'Polukranos, World Eater': 0} )
+
+    def test_mana_rocks_dont_instantly_ramp_turn_3(self):
+        """Abzan Banner is cast on 3, but we shouldn't be able to use it to cast 4-mana spells on turn 3."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Forest','Forest','Forest','Abzan Banner','Karametra, God of Harvests', 'Polukranos, World Eater'],['Forest','Forest','Forest']),
+                                      ManaBase({'Forest': 6, 'Abzan Banner': 1, 'Karametra, God of Harvests': 1, 'Polukranos, World Eater': 1}),
+                                      3,       # maxturns here
+                                      False 
+                                     )[0][2], # turn number minus 1 here
+                             {"Abzan Banner": 1, 'Karametra, God of Harvests': 0, 'Polukranos, World Eater': 0} )
+
+    def test_mana_rocks_dont_instantly_ramp_turn_4(self):
+        """Abzan BAnner being cast on 3 allows us to cast both 4- and 5-mana spells on turn 4."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Forest','Forest','Forest','Abzan Banner','Karametra, God of Harvests', 'Polukranos, World Eater'],['Forest','Forest','Forest']),
+                                      ManaBase({'Forest': 6, 'Abzan Banner': 1, 'Karametra, God of Harvests': 1, 'Polukranos, World Eater': 1}),
+                                      4,       # maxturns here
+                                      False 
+                                     )[0][3], # turn number minus 1 here
+                             {"Abzan Banner": 1, 'Karametra, God of Harvests': 1, 'Polukranos, World Eater': 1} )
+
+    def test_two_mana_dorks_ramp_us_twice(self):
+        """If you have two Pilgrims, you should be able to cast 5-mana spells on turn 3."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Forest',"Avacyn's Pilgrim","Avacyn's Pilgrim",'Forest','Forest','Wingmate Roc'],['Wingmate Roc','Wingmate Roc']),
+                                      ManaBase({'Forest': 3,"Avacyn's Pilgrim": 1, 'Wingmate Roc': 3}),
+                                      3,       # maxturns here
+                                      False 
+                                     )[0][2], # turn number minus 1 here
+                             {"Avacyn's Pilgrim": 1, 'Wingmate Roc': 1} )
+
+    def test_noble_hierarch_taps_for_three_colors_turn_1(self):
+        """Noble Hierarch is castable with a Forest, but the others aren't."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Forest',"Noble Hierarch","Thoughtseize",'Strangleroot Geist','Frenzied Goblin','Cloudfin Raptor','Silence'],['Silence']),
+                                      ManaBase({'Darksteel Citadel': 1,"Noble Hierarch": 1,"Thoughtseize": 1,'Strangleroot Geist': 1,'Frenzied Goblin': 1,'Cloudfin Raptor': 1,'Silence': 2}),
+                                      2,       # maxturns here
+                                      False 
+                                     )[0][0], # turn number minus 1 here
+                             {"Noble Hierarch": 1,"Thoughtseize": 0,'Strangleroot Geist': 0,'Frenzied Goblin': 0,'Cloudfin Raptor': 0,'Silence': 0} )
+
+    def test_noble_hierarch_taps_for_three_colors_turn_2(self):
+        """Noble Hierarch should tap for three colors, casting three of these spells."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Forest',"Noble Hierarch","Thoughtseize",'Strangleroot Geist','Frenzied Goblin','Cloudfin Raptor','Silence'],['Silence']),
+                                      ManaBase({'Forest': 1,"Noble Hierarch": 1,"Thoughtseize": 1,'Strangleroot Geist': 1,'Frenzied Goblin': 1,'Cloudfin Raptor': 1,'Silence': 2}),
+                                      2,       # maxturns here
+                                      False 
+                                     )[0][1], # turn number minus 1 here
+                             {"Noble Hierarch": 1,"Thoughtseize": 0,'Strangleroot Geist': 1,'Frenzied Goblin': 0,'Cloudfin Raptor': 1,'Silence': 1} )
+
+    def test_sylvan_caryatid_taps_for_any_color_turn_2(self):
+        """Sylvan Caryatid should allow all the spells here except Polukranos to be cast."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Forest','Plains',"Sylvan Caryatid","Thoughtseize",'Boon Satyr','Frenzied Goblin','Cloudfin Raptor','Silence', 'Polukranos, World Eater'],['Silence','Silence']),
+                                      ManaBase({'Plains': 1, 'Forest': 1, "Sylvan Caryatid": 1,"Thoughtseize": 1,'Boon Satyr': 1,'Frenzied Goblin': 1,'Cloudfin Raptor': 1,'Silence': 3, 'Polukranos, World Eater': 1}),
+                                      2,       # maxturns here
+                                      False 
+                                     )[0][1], # turn number minus 1 here
+                             {"Sylvan Caryatid": 1,"Thoughtseize": 0,'Boon Satyr': 0,'Frenzied Goblin': 0,'Cloudfin Raptor': 0,'Silence': 1, 'Polukranos, World Eater': 0} )
+
+    def test_sylvan_caryatid_taps_for_any_color_turn_3(self):
+        """Sylvan Caryatid should allow all the spells here except Polukranos to be cast."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Forest','Plains',"Sylvan Caryatid","Thoughtseize",'Boon Satyr','Frenzied Goblin','Cloudfin Raptor','Silence', 'Polukranos, World Eater'],['Silence','Silence']),
+                                      ManaBase({'Plains': 1, 'Forest': 1, "Sylvan Caryatid": 1,"Thoughtseize": 1,'Boon Satyr': 1,'Frenzied Goblin': 1,'Cloudfin Raptor': 1,'Silence': 3, 'Polukranos, World Eater': 1}),
+                                      3,       # maxturns here
+                                      False 
+                                     )[0][2], # turn number minus 1 here
+                             {"Sylvan Caryatid": 1,"Thoughtseize": 1,'Boon Satyr': 1,'Frenzied Goblin': 1,'Cloudfin Raptor': 1,'Silence': 1, 'Polukranos, World Eater': 0} )
+
+    def test_sylvan_caryatid_and_citadel_taps_for_any_color_turn_2(self):
+        """Sylvan Caryatid should allow all the spells here except Polukranos to be cast."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Forest','Darksteel Citadel',"Sylvan Caryatid","Thoughtseize",'Boon Satyr','Frenzied Goblin','Cloudfin Raptor','Silence', 'Polukranos, World Eater'],['Silence','Silence']),
+                                      ManaBase({'Darksteel Citadel': 1, 'Forest': 1, "Sylvan Caryatid": 1,"Thoughtseize": 1,'Boon Satyr': 1,'Frenzied Goblin': 1,'Cloudfin Raptor': 1,'Silence': 3, 'Polukranos, World Eater': 1}),
+                                      2,       # maxturns here
+                                      False 
+                                     )[0][1], # turn number minus 1 here
+                             {"Sylvan Caryatid": 1,"Thoughtseize": 0,'Boon Satyr': 0,'Frenzied Goblin': 0,'Cloudfin Raptor': 0,'Silence': 0, 'Polukranos, World Eater': 0} )
+
+    def test_sylvan_caryatid_and_citadel_taps_for_any_color_turn_3(self):
+        """Does Sylvan Caryatid work for any color if you have a Citadel?"""
+        self.assertDictEqual(playHand(LineOfPlay([],['Forest','Darksteel Citadel',"Sylvan Caryatid","Thoughtseize",'Boon Satyr','Frenzied Goblin','Cloudfin Raptor','Silence', 'Polukranos, World Eater'],['Silence','Silence']),
+                                      ManaBase({'Darksteel Citadel': 1, 'Forest': 1, "Sylvan Caryatid": 1,"Thoughtseize": 1,'Boon Satyr': 1,'Frenzied Goblin': 1,'Cloudfin Raptor': 1,'Silence': 3, 'Polukranos, World Eater': 1}),
+                                      3,       # maxturns here
+                                      False 
+                                     )[0][2], # turn number minus 1 here
+                             {"Sylvan Caryatid": 1,"Thoughtseize": 1,'Boon Satyr': 1,'Frenzied Goblin': 1,'Cloudfin Raptor': 1,'Silence': 1, 'Polukranos, World Eater': 0} )
+
+    def test_chained_to_the_rocks_is_not_a_one_drop(self):
+        """You can't cast Chained to the rocks on turn one with a plains or a battlefield forge, but you can after drawing the mountain."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Plains','Battlefield Forge','Chained to the Rocks'],['Mountain']),
+                                      ManaBase({'Plains': 1, 'Battlefield Forge': 1, 'Chained to the Rocks': 1, 'Mountain' : 1}),
+                                      2,       # maxturns here
+                                      False 
+                                     )[0][0], # turn number minus 1 here
+                             {'Chained to the Rocks': 0} )
+
+    def test_chained_to_the_rocks_is_a_two_drop(self):
+        """You can't cast Chained to the rocks on turn one with a plains or a battlefield forge, but you can after drawing the mountain."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Plains','Battlefield Forge','Chained to the Rocks'],['Mountain']),
+                                      ManaBase({'Plains': 1, 'Battlefield Forge': 1, 'Chained to the Rocks': 1, 'Mountain' : 1}),
+                                      2,       # maxturns here
+                                      False 
+                                     )[0][1], # turn number minus 1 here
+                             {'Chained to the Rocks': 1} )
+
+    def test_chained_to_the_rocks_is_a_one_drop_with_foundry(self):
+        """If your untapped mountain produces white, you can cast Chained turn 1. :)"""
+        self.assertDictEqual(playHand(LineOfPlay([],['Sacred Foundry','Battlefield Forge','Chained to the Rocks'],['Mountain']),
+                                      ManaBase({'Sacred Foundry': 1, 'Battlefield Forge': 1, 'Chained to the Rocks': 1, 'Mountain' : 1}),
+                                      2,       # maxturns here
+                                      False 
+                                     )[0][0], # turn number minus 1 here
+                             {'Chained to the Rocks': 1} )
+
+    def test_fetching_to_chain_to_the_rocks_part_1(self):
+        """You can fetch for a Sacred Foundry to cast Chained to the Rocks turn 1. :)"""
+        self.assertDictEqual(playHand(LineOfPlay([],['Wooded Foothills','Chained to the Rocks'],['Island','Mountain','Plains','Sacred Foundry','Plains','Mountain']),
+                                      ManaBase({'Wooded Foothills': 1,'Chained to the Rocks': 1,'Island': 1,'Mountain': 2,'Plains': 2,'Sacred Foundry': 1}),
+                                      1,       # maxturns here
+                                      False 
+                                     )[0][0], # turn number minus 1 here
+                             {'Chained to the Rocks': 1} )
+
+    def test_fetching_to_chain_to_the_rocks_part_2(self):
+        """You can fetch for a Sacred Foundry to cast Chained to the Rocks turn 1... but not with Polluted Delta."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Polluted Delta','Chained to the Rocks'],['Island','Mountain','Plains','Sacred Foundry','Plains','Mountain']),
+                                      ManaBase({'Polluted Delta': 1,'Chained to the Rocks': 1,'Island': 1,'Mountain': 2,'Plains': 2,'Sacred Foundry': 1}),
+                                      1,       # maxturns here
+                                      False 
+                                     )[0][0], # turn number minus 1 here
+                             {'Chained to the Rocks': 0} )
+
+    def test_fetching_to_chain_to_the_rocks_part_3_turn_1(self):
+        """You can fetch for a mountain using a non-mountain-fetcher if your lands are right."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Windswept Heath','Plains','Chained to the Rocks'],['Island','Mountain','Plains','Stomping Ground','Mountain']),
+                                      ManaBase({'Windswept Heath': 1,'Chained to the Rocks': 1,'Island': 1,'Mountain': 2,'Plains': 2,'Stomping Ground': 1}),
+                                      2,       # maxturns here
+                                      False 
+                                     )[0][0], # turn number minus 1 here
+                             {'Chained to the Rocks': 0} )
+
+    def test_fetching_to_chain_to_the_rocks_part_3_turn_2(self):
+        """You can fetch for a mountain using a non-mountain-fetcher if your lands are right."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Windswept Heath','Plains','Chained to the Rocks'],['Island','Mountain','Plains','Stomping Ground','Mountain']),
+                                      ManaBase({'Windswept Heath': 1,'Chained to the Rocks': 1,'Island': 1,'Mountain': 2,'Plains': 2,'Stomping Ground': 1}),
+                                      2,       # maxturns here
+                                      False 
+                                     )[0][1], # turn number minus 1 here
+                             {'Chained to the Rocks': 1} )
+
+    def test_fetching_fails_if_no_basics_are_left_part_1(self):
+        """If the only thing in the deck is a mountain, you can only get red."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Wooded Foothills','Thoughtseize','Frenzied Goblin','Charging Badger','Silence','Cloudfin Raptor'],['Mountain']),
+                                      ManaBase({'Wooded Foothills': 1,'Thoughtseize': 1,'Frenzied Goblin': 1,'Charging Badger': 1,'Silence': 1,'Cloudfin Raptor': 1,'Mountain': 1,'Forest': 1}),
+                                      1,       # maxturns here
+                                      False 
+                                     )[0][0], # turn number minus 1 here
+                             {'Thoughtseize': 0,'Frenzied Goblin': 1,'Charging Badger': 0,'Silence': 0,'Cloudfin Raptor': 0} )
+
+    def test_fetching_fails_if_no_basics_are_left_part_2(self):
+        """If the only thing in the deck is a forest, you can only get green."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Wooded Foothills','Thoughtseize','Frenzied Goblin','Charging Badger','Silence','Cloudfin Raptor'],['Forest']),
+                                      ManaBase({'Wooded Foothills': 1,'Thoughtseize': 1,'Frenzied Goblin': 1,'Charging Badger': 1,'Silence': 1,'Cloudfin Raptor': 1,'Mountain': 1,'Forest': 1}),
+                                      1,       # maxturns here
+                                      False 
+                                     )[0][0], # turn number minus 1 here
+                             {'Thoughtseize': 0,'Frenzied Goblin': 0,'Charging Badger': 1,'Silence': 0,'Cloudfin Raptor': 0} )
+
+    def test_fetching_fails_if_no_basics_are_left_part_3(self):
+        """If the deck is empty, fetching fails. :)"""
+        self.assertDictEqual(playHand(LineOfPlay([],['Wooded Foothills','Thoughtseize','Frenzied Goblin','Charging Badger','Silence','Cloudfin Raptor'],[]),
+                                      ManaBase({'Wooded Foothills': 1,'Thoughtseize': 1,'Frenzied Goblin': 1,'Charging Badger': 1,'Silence': 1,'Cloudfin Raptor': 1,'Mountain': 1,'Forest': 1}),
+                                      1,       # maxturns here
+                                      False 
+                                     )[0][0], # turn number minus 1 here
+                             {'Thoughtseize': 0,'Frenzied Goblin': 0,'Charging Badger': 0,'Silence': 0,'Cloudfin Raptor': 0} )
+
+    def test_fetching_fails_if_no_basics_are_left_part_4(self):
+        """If the deck is empty, fetching fails. :)"""
+        self.assertDictEqual(playHand(LineOfPlay([],['Wooded Foothills','Thoughtseize','Frenzied Goblin','Charging Badger','Silence','Cloudfin Raptor'],['Island']),
+                                      ManaBase({'Wooded Foothills': 1,'Thoughtseize': 1,'Frenzied Goblin': 1,'Charging Badger': 1,'Silence': 1,'Cloudfin Raptor': 1,'Mountain': 1,'Forest': 1}),
+                                      1,       # maxturns here
+                                      False 
+                                     )[0][0], # turn number minus 1 here
+                             {'Thoughtseize': 0,'Frenzied Goblin': 0,'Charging Badger': 0,'Silence': 0,'Cloudfin Raptor': 0} )
+
+    def test_fetching_succeeds_along_with_scrying_turn_1(self):
+        """Here we set up a situation where we need to scry a card to the bottom and then fetch the card we scried."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Wooded Foothills','Temple of Triumph','Wojek Halberdiers'],['Mountain','Island','Island','Island','Island','Island']),
+                                      ManaBase({'Wooded Foothills': 1,'Temple of Triumph': 1,'Wojek Halberdiers': 1,'Mountain': 1,'Island': 5}),
+                                      2,       # maxturns here
+                                      False 
+                                     )[0][0], # turn number minus 1 here
+                             {'Wojek Halberdiers': 0} )
+
+    def test_fetching_succeeds_along_with_scrying_turn_2(self):
+        """Here we set up a situation where we need to scry a card to the bottom and then fetch the card we scried."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Wooded Foothills','Temple of Triumph','Wojek Halberdiers'],['Mountain','Island','Island','Island','Island','Island']),
+                                      ManaBase({'Wooded Foothills': 1,'Temple of Triumph': 1,'Wojek Halberdiers': 1,'Mountain': 1,'Island': 5}),
+                                      2,       # maxturns here
+                                      False 
+                                     )[0][1], # turn number minus 1 here
+                             {'Wojek Halberdiers': 1} )
+
+    def test_fetching_does_not_affect_topdecks_if_possible_turn_1(self):
+        """Here we fetch for a Mountain when scrying away the top Mountain would be good; fetchlands are not like that, so we should fail to cast until turn 3."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Wooded Foothills','Wojek Halberdiers'],['Mountain','Plains','Island','Island','Island','Mountain']),
+                                      ManaBase({'Wooded Foothills': 1,'Plains': 1,'Wojek Halberdiers': 1,'Mountain': 1,'Island': 3}),
+                                      3,       # maxturns here
+                                      False 
+                                     )[0][0], # turn number minus 1 here
+                             {'Wojek Halberdiers': 0} )
+
+    def test_fetching_does_not_affect_topdecks_if_possible_turn_2(self):
+        """Here we fetch for a Mountain when scrying away the top Mountain would be good; fetchlands are not like that, so we should fail to cast until turn 3."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Wooded Foothills','Wojek Halberdiers'],['Mountain','Plains','Island','Island','Island','Mountain']),
+                                      ManaBase({'Wooded Foothills': 1,'Plains': 1,'Wojek Halberdiers': 1,'Mountain': 1,'Island': 3}),
+                                      3,       # maxturns here
+                                      False 
+                                     )[0][1], # turn number minus 1 here
+                             {'Wojek Halberdiers': 0} )
+
+    def test_fetching_does_not_affect_topdecks_if_possible_turn_3(self):
+        """Here we fetch for a Mountain when scrying away the top Mountain would be good; fetchlands are not like that, so we should fail to cast until turn 3."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Wooded Foothills','Wojek Halberdiers'],['Mountain','Plains','Island','Island','Island','Mountain']),
+                                      ManaBase({'Wooded Foothills': 1,'Plains': 1,'Wojek Halberdiers': 1,'Mountain': 1,'Island': 3}),
+                                      3,       # maxturns here
+                                      False 
+                                     )[0][2], # turn number minus 1 here
+                             {'Wojek Halberdiers': 1} )
+
+    def test_fetching_affects_topdecks_if_no_other_choice_turn_1(self):
+        """Here we fetch for a Mountain when scrying away the top Mountain would be good; fetchlands have no way out if there aren't other targets."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Wooded Foothills','Wojek Halberdiers'],['Mountain','Plains','Island','Island','Island']),
+                                      ManaBase({'Wooded Foothills': 1,'Plains': 1,'Wojek Halberdiers': 1,'Mountain': 1,'Island': 3}),
+                                      3,       # maxturns here
+                                      False 
+                                     )[0][0], # turn number minus 1 here
+                             {'Wojek Halberdiers': 0} )
+
+    def test_fetching_affects_topdecks_if_no_other_choice_turn_2(self):
+        """Here we fetch for a Mountain when scrying away the top Mountain would be good; fetchlands have no way out if there aren't other targets."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Wooded Foothills','Wojek Halberdiers'],['Mountain','Plains','Island','Island','Island']),
+                                      ManaBase({'Wooded Foothills': 1,'Plains': 1,'Wojek Halberdiers': 1,'Mountain': 1,'Island': 3}),
+                                      3,       # maxturns here
+                                      False 
+                                     )[0][1], # turn number minus 1 here
+                             {'Wojek Halberdiers': 1} )
+
+    def test_fetching_for_a_forest_to_ramp_us_turn_1(self):
+        """Even though it is possible to fetch for R to cast a 2-drop, we want to realize it was also possible to fetch for G to cast the Caryatid to ramp us."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Wooded Foothills','Elvish Mystic','Frenzied Goblin','Fanatic of Xenagos'],['Island','Island','Island','Forest','Mountain']),
+                                      ManaBase({'Wooded Foothills': 1,'Elvish Mystic': 1,'Frenzied Goblin': 1,'Fanatic of Xenagos': 1,'Island': 3,'Forest': 1,'Mountain': 1}),
+                                      2,       # maxturns here
+                                      False 
+                                     )[0][0], # turn number minus 1 here
+                             {'Elvish Mystic': 1,'Frenzied Goblin': 1,'Fanatic of Xenagos': 0} )
+
+    def test_fetching_for_a_forest_to_ramp_us_turn_2(self):
+        """Even though it is possible to fetch for R to cast a 2-drop, we want to realize it was also possible to fetch for G to cast the Caryatid to ramp us."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Wooded Foothills','Elvish Mystic','Frenzied Goblin','Fanatic of Xenagos'],['Mountain','Island','Island','Forest','Mountain']),
+                                      ManaBase({'Wooded Foothills': 1,'Elvish Mystic': 1,'Frenzied Goblin': 1,'Fanatic of Xenagos': 1,'Island': 3,'Forest': 1,'Mountain': 1}),
+                                      2,       # maxturns here
+                                      False 
+                                     )[0][1], # turn number minus 1 here
+                             {'Elvish Mystic': 1,'Frenzied Goblin': 1,'Fanatic of Xenagos': 1} )
+
+    def test_evolving_wilds_isnt_an_untapped_source_turn_1(self):
+        """Evolving Wilds can find anything, but not a turn 1 play."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Evolving Wilds','Elvish Mystic','Frenzied Goblin','Fanatic of Xenagos', 'Polukranos, World Eater'],['Mountain','Island','Island','Forest','Mountain']),
+                                      ManaBase({'Evolving Wilds': 1,'Elvish Mystic': 1,'Frenzied Goblin': 1,'Fanatic of Xenagos': 1,'Island': 3,'Forest': 1,'Mountain': 1, 'Polukranos, World Eater': 1}),
+                                      3,       # maxturns here
+                                      False 
+                                     )[0][0], # turn number minus 1 here
+                             {'Elvish Mystic': 0,'Frenzied Goblin': 0,'Fanatic of Xenagos': 0, 'Polukranos, World Eater': 0} )
+
+    def test_evolving_wilds_isnt_an_untapped_source_turn_2(self):
+        """Evolving Wilds can find anything, but not a turn 1 play."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Evolving Wilds','Elvish Mystic','Frenzied Goblin','Fanatic of Xenagos', 'Polukranos, World Eater'],['Mountain','Island','Island','Forest','Mountain']),
+                                      ManaBase({'Evolving Wilds': 1,'Elvish Mystic': 1,'Frenzied Goblin': 1,'Fanatic of Xenagos': 1,'Island': 3,'Forest': 1,'Mountain': 1, 'Polukranos, World Eater': 1}),
+                                      3,       # maxturns here
+                                      False 
+                                     )[0][1], # turn number minus 1 here
+                             {'Elvish Mystic': 1,'Frenzied Goblin': 1,'Fanatic of Xenagos': 0, 'Polukranos, World Eater': 0} )
+
+    def test_evolving_wilds_isnt_an_untapped_source_turn_3(self):
+        """Evolving Wilds can find anything, but not a turn 1 play."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Evolving Wilds','Elvish Mystic','Frenzied Goblin','Fanatic of Xenagos', 'Polukranos, World Eater'],['Mountain','Island','Island','Forest','Mountain']),
+                                      ManaBase({'Evolving Wilds': 1,'Elvish Mystic': 1,'Frenzied Goblin': 1,'Fanatic of Xenagos': 1,'Island': 3,'Forest': 1,'Mountain': 1, 'Polukranos, World Eater': 1}),
+                                      3,       # maxturns here
+                                      False 
+                                     )[0][2], # turn number minus 1 here
+                             {'Elvish Mystic': 1,'Frenzied Goblin': 1,'Fanatic of Xenagos': 1, 'Polukranos, World Eater': 1} )
 
 if __name__ == '__main__':
     unittest.main()

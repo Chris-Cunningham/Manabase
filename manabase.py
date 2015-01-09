@@ -1179,12 +1179,12 @@ def displayResults(displaycasts = None, displaydrawsdictionary = None, displaydr
 				# This basic margin of error calculation is only valid if we have more than 30 trials and at least 5 successes and at least 5 failures.
 				error = 1.96*math.sqrt(displaycasts[i][card]*(numberofdraws-displaycasts[i][card])/math.pow(numberofdraws,3))
 
-				if displaycasts[i][card] >= 5 and (numberofdraws-displaycasts[i][card]) >= 5 and numberofdraws >= 30 and error > 0.001:
+				if displaycasts[i][card] >= 5 and (numberofdraws-displaycasts[i][card]) >= 5 and numberofdraws >= 30 and error >= 0.0005:
 					# Only actually display the margin of error if it is at least 0.1% and if the statistics tells us this is even meaningful.
 					if 'text' in displayformat: percents[card] += ('+-' + '{:<6.1%}'.format(error))
 					if 'html' in displayformat: percents[card] += ('&plusmn;' + '{:.1%}'.format(error) + '</td>')
 				elif error < 0.0005:
-					# If we have the error down below .01, display nothing.
+					# If we have the error down below 0.1%, display no error, since it is correct up to the number of significant digits displayed.
 					if 'text' in displayformat: percents[card] += '        '
 				else:
 					# If the problem is a small sample size, go with plus or minus question mark.

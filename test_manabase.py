@@ -812,5 +812,16 @@ class TestContinuePlaying(unittest.TestCase):
                                      )[0][2], # turn number minus 1 here
                              {'Elvish Mystic': 1,'Frenzied Goblin': 1,'Fanatic of Xenagos': 1, 'Polukranos, World Eater': 1} )
 
+    def test_dont_cast_spells_if_you_arent_supposed_to(self):
+        """If this turn didn't just start, then we are only here to make a land drop, so we shouldn't be casting spells."""
+        self.assertDictEqual( continuePlaying(  LineOfPlay([['Forest'],['Forest','Explore']],['Forest','Elvish Mystic'],['Forest']),
+                                             ManaBase({'Forest': 1,'Elvish Mystic': 2}),
+                                             False, 
+                                             [ 'Elvish Mystic',],
+                                             [{'Elvish Mystic': 0},{'Elvish Mystic': 0}], 0, 2, #maxturns here at the end
+                                             this_turn_just_started = False
+                                           )[1][1], #turn number minus 1 here at the end
+                           {'Elvish Mystic': 0} )        
+
 if __name__ == '__main__':
     unittest.main()

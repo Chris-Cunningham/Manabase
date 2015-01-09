@@ -77,6 +77,7 @@ class ManaBase:
 	# A ManaBase is a dictionary of lands and what they do, in addition to some synthesized information about how to play the mana.
 	# For example, we need to know that Temple of Epiphany is strictly better than Island, so if tapping Island for blue doesn't get us there, there is no reason to try tapping Temple of Epiphany for the same blue.
 	# Additionally, we get a little optimization by just putting the simpler lands first in the list manaSourcesInOrder.
+	# It also contains some spells that help the mana, like Satyr Wayfinder or Courser of Kruphix.
 	def __init__(self, decklist):
 		# This function should take a decklist and go through all the manaproducers creating a small database and its helpers.
 		# For example, a Jeskai decklist might end up with the following manaDatabase:
@@ -92,6 +93,7 @@ class ManaBase:
 		if debug['parseMana']: print('Beginning Mana Parser.')
 
 		manaDatabase = {}
+		spellDatabase = {} # Spells that do not directly create mana, but affect our mana.
 
 		# Every lands database needs some basic lands.
 		manaDatabase['Island'] = [ManaPool('{U}')]
@@ -152,9 +154,11 @@ class ManaBase:
 							manaDatabase[card].append('FetchBasic')
 				if debug['parseMana']: print('Parsed as ',manaDatabase[card])
 			elif card not in manaDatabase:
-				# Okay, we're going to try to find all the mana dorks or manarocks.
+				# Okay, we're going to try to find all the mana dorks, manarocks, and other cards that could affect our mana.
 				if debug['parseMana']: print('Parsing nonland card:',card)
-				if 'text' in cardDatabase[card]:
+				if card is 'Satyr Wayfinder':
+					spellDatabase['Satyr Wayfinder'] = ('Land from the Top', 4)
+				elif 'text' in cardDatabase[card]:
 					# Manadorks and rocks should have these phrases:
 					if '{T}: Add' in cardDatabase[card]['text'] and 'to your mana pool' in cardDatabase[card]['text']:
 						# Start one character after "{T}: Add" and go up to "to your mana pool" and see what we get.
@@ -223,6 +227,7 @@ class ManaBase:
 		self.manaDatabase = manaDatabase
 		self.manaSourcesBetterThan = manaSourcesBetterThan
 		self.manaSourcesInOrder = manaSourcesInOrder
+		self.spellDatabase = spellDatabase
 
 def manaSourcesAvailable(lineofplay, manaBase):
 	"""Given a line of play and a manabase, we want to know which mana
@@ -495,7 +500,7 @@ def spacing(lineofplay, lineOfPlayCounter):
 	"""
 	return 'line'+format(lineOfPlayCounter,'>5')+': '+'|  '*lineofplay.turn()
 
-def continuePlaying(lineofplay,manaBase,drawacard,spellsthistrial,caststhistrial,lineOfPlayCounter,maxturns):
+def continuePlaying(lineofplay,manaBase,drawacard,spellsthistrial,caststhistrial,lineOfPlayCounter,maxturns,this_turn_just_started = True):
 	"""Given a line of play, a mana base, whether we should open by drawing a card,
 	and the data of how this trial has gone so far, this function plays one more turn.
 	It returns the new lineOfPlayCounter and the new list of casts this trial.
@@ -507,14 +512,26 @@ def continuePlaying(lineofplay,manaBase,drawacard,spellsthistrial,caststhistrial
 	# continuePlaying() from there. This creates a recursive tree of lines of play
 	# which is only stopped by the maxturns number at the top of the program.
 	# I highly recommend low values of maxturns.
+
 	global slowMode
 	global slowModeWait
 
 	# Let's get the information we need out of the ManaBase.
-	manaDatabase = manaBase.manaDatabase
+	manaDatabase, spellDatabase = manaBase.manaDatabase, manaBase.spellDatabase
+
+	# If we are explicitly told not to start a new turn, then we will listen. In this case, we will play a land but NOT cast any new spells.
+	if this_turn_just_started:
+		this_turn = lineofplay.turn() + 1
+	else:
+		this_turn = lineofplay.turn()
+
 
 	if slowMode: 
-		print(spacing(lineofplay, lineOfPlayCounter)+'Now starting turn',lineofplay.turn()+1,'with hand:',lineofplay.hand)
+		if this_turn_just_started:
+			print(spacing(lineofplay, lineOfPlayCounter)+'Now starting turn',this_turn,'with hand:',lineofplay.hand)
+		else:
+			print(spacing(lineofplay, lineOfPlayCounter)+'Continuing turn',this_turn,'with hand:',lineofplay.hand)
+
 		if slowModeWait.lower() == 'skip':
 			print(spacing(lineofplay, lineOfPlayCounter)+'Our plays so far have been '+str(lineofplay.plays))
 		else:
@@ -529,8 +546,8 @@ def continuePlaying(lineofplay,manaBase,drawacard,spellsthistrial,caststhistrial
 	landstotry = [card for card in lineofplay.hand if isLand(card)]
 
 	# Optimization: If all the cards we are checking on have already been cast OR if there are no lands to play, then we don't actually have to even play another land.
-	# Notice that here, if lineofplay.turn() is 2, then we are actually about to work on turn 3. So we want to check caststhistrial[2+1-1].
-	if 0 in caststhistrial[lineofplay.turn()+1-1].values() and landstotry != []:
+	# Notice that here, if this_turn is 3, then we are actually about to work on turn 3. So we want to check caststhistrial[3-1].
+	if 0 in caststhistrial[this_turn-1].values() and landstotry != []:
 
 		for card in set(landstotry):
 
@@ -580,15 +597,21 @@ def continuePlaying(lineofplay,manaBase,drawacard,spellsthistrial,caststhistrial
 					# One thing: we need to tell castSpells that it should not use the Evolving Wilds lands this turn.
 					if 'FetchBasic' in manaDatabase[card]:
 						lineOfPlayCounter += 1
-						if slowMode: print(spacing(lineofplay, lineOfPlayCounter)+'Trying',card,'fetching a tapped '+target+' as our turn '+str(lineofplay.turn()+1)+' land drop, looking for spells to cast...')
-						lineOfPlayCounter, caststhistrial = castSpells(newlineofplay, manaBase, False, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
+						if slowMode: print(spacing(lineofplay, lineOfPlayCounter)+'Trying',card,'fetching a tapped '+target+' as our turn '+str(this_turn)+' land drop, looking for spells to cast...')
+						if this_turn_just_started:
+							lineOfPlayCounter, caststhistrial = castSpells(newlineofplay, manaBase, False, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
+						elif this_turn < maxturns:
+								lineOfPlayCounter, caststhistrial = continuePlaying(newlineofplay, manaBase, True, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
 					else:
 						lineOfPlayCounter += 1
-						if slowMode: print(spacing(lineofplay, lineOfPlayCounter)+'Trying',card,'fetching a '+target+' as our turn '+str(lineofplay.turn()+1)+' land drop, looking for spells to cast...')
-						lineOfPlayCounter, caststhistrial = castSpells(newlineofplay, manaBase, True, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)	
+						if slowMode: print(spacing(lineofplay, lineOfPlayCounter)+'Trying',card,'fetching a '+target+' as our turn '+str(this_turn)+' land drop, looking for spells to cast...')
+						if this_turn_just_started:
+							lineOfPlayCounter, caststhistrial = castSpells(newlineofplay, manaBase, True, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
+						elif this_turn < maxturns:
+							lineOfPlayCounter, caststhistrial = continuePlaying(newlineofplay, manaBase, True, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
 			else:
 				lineOfPlayCounter += 1
-				if slowMode: print(spacing(lineofplay, lineOfPlayCounter)+'Trying',card,'as our turn '+str(lineofplay.turn()+1)+' land drop, looking for spells to cast...')
+				if slowMode: print(spacing(lineofplay, lineOfPlayCounter)+'Trying',card,'as our turn '+str(this_turn)+' land drop, looking for spells to cast...')
 
 				# Playing a non-fetchland is much easier.
 				newlineofplay = deepcopy(lineofplay)
@@ -596,11 +619,14 @@ def continuePlaying(lineofplay,manaBase,drawacard,spellsthistrial,caststhistrial
 				i = newlineofplay.hand.index(card)
 				newlineofplay.plays.append([newlineofplay.hand.pop(i)])
 				# Check if anything is castable and cast it -- this increments caststhisturn and makes new lines of play for spells we know how to handle.
-				lineOfPlayCounter, caststhistrial = castSpells(newlineofplay, manaBase, True, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
+				if this_turn_just_started:
+					lineOfPlayCounter, caststhistrial = castSpells(newlineofplay, manaBase, True, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
+				elif this_turn < maxturns:
+					lineOfPlayCounter, caststhistrial = continuePlaying(newlineofplay, manaBase, True, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
 
 				# If we just played a scryland, then we need to scry to the bottom and cast spells. We only care about this if there are turns left.
 				# lineofplay.turn() was the turn before we played the scryland, so if maxturns is 4 and lineofplay.turn() is 3, we actually don't want to play another turn.
-				if lineofplay.turn()+1 < maxturns:
+				if this_turn < maxturns:
 					if 'scry' in manaDatabase[card]:
 						# If the land was a scryland, then we also need a line of play where we bottomed the top card.
 						newlineofplay2 = deepcopy(lineofplay)
@@ -611,7 +637,10 @@ def continuePlaying(lineofplay,manaBase,drawacard,spellsthistrial,caststhistrial
 						newlineofplay2.deck = newlineofplay2.deck[1:] + newlineofplay2.deck[:1]
 						lineOfPlayCounter += 1
 						if slowMode: print(spacing(lineofplay, lineOfPlayCounter)+'   We\'ll also make a line of play where we scry to the bottom.')
-						lineOfPlayCounter, caststhistrial = castSpells(newlineofplay2, manaBase, True, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
+						if this_turn_just_started:
+							lineOfPlayCounter, caststhistrial = castSpells(newlineofplay2, manaBase, True, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
+						else:
+							lineOfPlayCounter, caststhistrial = continuePlaying(newlineofplay2, manaBase, True, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
 
 	else:
 		# All the spells were already cast, so just keep going on to later turns by not playing a land here.
@@ -620,7 +649,10 @@ def continuePlaying(lineofplay,manaBase,drawacard,spellsthistrial,caststhistrial
 		# Also remember to continue this line of play (where you didn't play a land this turn).
 		lineofplay.plays.append([])
 		# Check if anything is castable and cast it -- this increments caststhisturn and makes new lines of play for spells we know how to handle, then continues playing.
-		lineOfPlayCounter, caststhistrial = castSpells(lineofplay, manaBase, True, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
+		if this_turn_just_started:
+			lineOfPlayCounter, caststhistrial = castSpells(lineofplay, manaBase, True, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
+		elif this_turn < maxturns:
+			lineOfPlayCounter, caststhistrial = continuePlaying(lineofplay, manaBase, True, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
 
 	return lineOfPlayCounter, caststhistrial
 
@@ -700,17 +732,28 @@ def castSpells(lineofplay, manaBase, useThisTurnsLands, spellsthistrial, caststh
 
 	weCouldNotCastAnything = True
 
-	manaDatabase = manaBase.manaDatabase
+	manaDatabase, spellDatabase = manaBase.manaDatabase, manaBase.spellDatabase
 
 	# We don't actually want to cast very many spells. For now, the only ones we care about are mana producers.
 	# TODO: Courser, Card Draw Spells
 	for spell in spellsToCast:
-		if spell in manaDatabase:
-			# This one is a mana producer, so make a new line of play where we cast this.
+		if spell in manaDatabase or spell in spellDatabase:
+			# This one is a mana producer or somehow affects our mana, so make a new line of play where we cast this.
 			weCouldNotCastAnything = False
 			newlineofplay = deepcopy(lineofplay)
+
 			i = newlineofplay.hand.index(spell)
 			newlineofplay.plays[newlineofplay.turn()-1].append(newlineofplay.hand.pop(i))
+
+			if spell in spellDatabase:
+				# In theory we will map various cards to various effects in the ManaBase class at some point. For now, we've implemented "lands off the top" for wayfinder.
+				if spellDatabase[card][0] is 'Land from the Top':
+					cardsToLookAt = spellDatabase[card][1]
+					for i in range(cardsToLookAt):
+						if isLand(deck[i]):
+							# Make a new line of play where we put this land into our hand.
+							pass
+
 			# Keep going, if we should.
 			# Here, a land for turn has already been played, so if turn() is 4 and maxturns is 4, we actually don't want to play another turn.
 			if newlineofplay.turn() < maxturns:

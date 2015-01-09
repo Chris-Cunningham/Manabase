@@ -24,13 +24,14 @@ To-do
 * Implement Courser of Kruphix.
 * Implement card draw spells.
 * Implement Nykthos.
-* Track pain taken from painlands and fetches; track life gained from lands and Courser.
+* Track pain taken from painlands and fetches somehow; track life gained from lands and Courser.
+* Implement Checklands (do people use those or care?)
 * Allow an option to scale the percentages so that not making land drops doesn’t count against a spell's castability.
 * Do something intelligent with sideboards.
 
 Not Planned
 * X spells will probably always be treated as though X = 0.
-* Delve and other alternate cost mechanics are probably forever ignored.
+* Delve and other alternate cost mechanics are probably forever ignored. If you want to check whether you have double blue by turn 5, replace Dig Through Time with Tidebinder Mage in your decklist.
 * Fetching will never shuffle your library, meaning it does not exactly work correctly with scry; if it did, another fix would be needed to prevent “prescient fetching.” Courser will turn every fetchland into an untapped scryland, which is pretty close.
 * “Curving out”: If your hand is Temple, Mountain, then you can’t cast both your one-drop and your two-drop on curve, but the program notices that you can do either one, so both will probably always count as castable.
  

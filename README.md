@@ -17,6 +17,7 @@ Features
 * Multicolored lands are handled properly. Fetchlands and scrylands decisions are implemented as lines of play.
 * The most common corner cases in Khans of Tarkir standard, namely Urborg, Tomb of Yawgmoth, Chained to the Rocks, and Evolving Wilds, are handled appropriately. 
 * Mana abilities of cards like Elvish Mystic, Noble Hierarch, Sylvan Caryatid, and Abzan Banner are implemented, but mana abilities that have a cost (e.g. Signets) silently give wrong results.
+* Casting a spell that allows another spell to be cast that turn also works, e.g. Plains, Plains, Plains, Abzan Banner, Avacyn's Pilgrim, Wingmate Roc successfully casts Avacyn's Pilgrim turn 3 and Wingmate Roc turn 4.
 * A comprehensive battery of tests helps ensure that the results we get here are accurate.
 
 To-do

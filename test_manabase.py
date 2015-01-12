@@ -854,5 +854,88 @@ class TestPlayHand(unittest.TestCase):
                                      )[0][2], # turn number minus 1 here
                              {'Elvish Mystic': 1,'Frenzied Goblin': 1,'Fanatic of Xenagos': 1, 'Polukranos, World Eater': 1} )
 
+    def test_satyr_wayfinder_doesnt_ruin_everything_turn_1(self):
+        """Satyr Wayfinder shouldnt mess up our ability to cast these things."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Forest','Darksteel Citadel',"Sylvan Caryatid","Thoughtseize",'Boon Satyr','Frenzied Goblin','Cloudfin Raptor','Silence', 'Satyr Wayfinder', 'Polukranos, World Eater'],['Silence','Silence','Silence','Silence','Silence','Silence','Silence','Silence','Silence','Silence','Silence']),
+                                      ManaBase({'Darksteel Citadel': 1, 'Forest': 1, "Sylvan Caryatid": 1,"Thoughtseize": 1,'Boon Satyr': 1,'Frenzied Goblin': 1,'Cloudfin Raptor': 1,'Silence': 12, 'Polukranos, World Eater': 1, 'Satyr Wayfinder': 1}),
+                                      3,       # maxturns here
+                                      False 
+                                     )[0][0], # turn number minus 1 here
+                             {"Sylvan Caryatid": 0,"Thoughtseize": 0,'Boon Satyr': 0,'Frenzied Goblin': 0,'Satyr Wayfinder': 0, 'Cloudfin Raptor': 0,'Silence': 0, 'Polukranos, World Eater': 0} )
+
+
+    def test_satyr_wayfinder_doesnt_ruin_everything_turn_2(self):
+        """Satyr Wayfinder shouldnt mess up our ability to cast these things."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Forest','Darksteel Citadel',"Sylvan Caryatid","Thoughtseize",'Boon Satyr','Frenzied Goblin','Cloudfin Raptor','Silence', 'Satyr Wayfinder', 'Polukranos, World Eater'],['Silence','Silence','Silence','Silence','Silence','Silence','Silence','Silence','Silence','Silence','Silence']),
+                                      ManaBase({'Darksteel Citadel': 1, 'Forest': 1, "Sylvan Caryatid": 1,"Thoughtseize": 1,'Boon Satyr': 1,'Frenzied Goblin': 1,'Cloudfin Raptor': 1,'Silence': 12, 'Polukranos, World Eater': 1, 'Satyr Wayfinder': 1}),
+                                      3,       # maxturns here
+                                      False 
+                                     )[0][1], # turn number minus 1 here
+                             {"Sylvan Caryatid": 1,"Thoughtseize": 0,'Boon Satyr': 0,'Frenzied Goblin': 0,'Satyr Wayfinder': 1, 'Cloudfin Raptor': 0,'Silence': 0, 'Polukranos, World Eater': 0} )
+
+    def test_satyr_wayfinder_doesnt_ruin_everything_turn_3(self):
+        """Satyr Wayfinder shouldnt mess up our ability to cast these things."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Forest','Darksteel Citadel',"Sylvan Caryatid","Thoughtseize",'Boon Satyr','Frenzied Goblin','Cloudfin Raptor','Silence', 'Satyr Wayfinder', 'Polukranos, World Eater'],['Silence','Silence','Silence','Silence','Silence','Silence','Silence','Silence','Silence','Silence','Silence']),
+                                      ManaBase({'Darksteel Citadel': 1, 'Forest': 1, "Sylvan Caryatid": 1,"Thoughtseize": 1,'Boon Satyr': 1,'Frenzied Goblin': 1,'Cloudfin Raptor': 1,'Silence': 12, 'Polukranos, World Eater': 1, 'Satyr Wayfinder': 1}),
+                                      3,       # maxturns here
+                                      False 
+                                     )[0][2], # turn number minus 1 here
+                             {"Sylvan Caryatid": 1,"Thoughtseize": 1,'Boon Satyr': 1,'Frenzied Goblin': 1,'Satyr Wayfinder': 1, 'Cloudfin Raptor': 1,'Silence': 1, 'Polukranos, World Eater': 0} )
+
+    def test_satyr_wayfinder_can_get_us_a_land_turn_1(self):
+        """You can use wayfinder to go get a mountain for chained to the rocks! :)"""
+        self.assertDictEqual(playHand(LineOfPlay([],['Plains','Forest','Satyr Wayfinder','Chained to the Rocks'],['Plains','Plains','Plains','Island','Mountain','Plains','Plains','Plains']),
+                                      ManaBase({'Plains': 7, 'Island': 1, 'Forest': 1, 'Mountain': 1, 'Satyr Wayfinder': 1, 'Chained to the Rocks': 1}),
+                                      3,       # maxturns here
+                                      False 
+                                     )[0][0], # turn number minus 1 here
+                             {'Satyr Wayfinder': 0, 'Chained to the Rocks': 0} )
+
+    def test_satyr_wayfinder_can_get_us_a_land_turn_2(self):
+        """You can use wayfinder to go get a mountain for chained to the rocks! :)"""
+        self.assertDictEqual(playHand(LineOfPlay([],['Plains','Forest','Satyr Wayfinder','Chained to the Rocks'],['Plains','Plains','Plains','Island','Mountain','Plains','Plains','Plains']),
+                                      ManaBase({'Plains': 7, 'Island': 1, 'Forest': 1, 'Mountain': 1, 'Satyr Wayfinder': 1, 'Chained to the Rocks': 1}),
+                                      3,       # maxturns here
+                                      False 
+                                     )[0][1], # turn number minus 1 here
+                             {'Satyr Wayfinder': 1, 'Chained to the Rocks': 0} )
+
+    def test_satyr_wayfinder_can_get_us_a_land_turn_3(self):
+        """You can use wayfinder to go get a mountain for chained to the rocks! :)"""
+        self.assertDictEqual(playHand(LineOfPlay([],['Plains','Forest','Satyr Wayfinder','Chained to the Rocks'],['Plains','Plains','Plains','Island','Mountain','Plains','Plains','Plains']),
+                                      ManaBase({'Plains': 7, 'Island': 1, 'Forest': 1, 'Mountain': 1, 'Satyr Wayfinder': 1, 'Chained to the Rocks': 1}),
+                                      3,       # maxturns here
+                                      False 
+                                     )[0][2], # turn number minus 1 here
+                             {'Satyr Wayfinder': 1, 'Chained to the Rocks': 1} )
+
+    def test_satyr_wayfinder_lands_can_be_played_the_turn_you_find_them_turn_2(self):
+        """You can use wayfinder to get a swamp to cast Thoughtseize!"""
+        self.assertDictEqual(playHand(LineOfPlay([],['Forest', 'Satyr Wayfinder', 'Thoughtseize'],['Thornwood Falls','Forest','Forest','Forest','Forest','Swamp','Forest']),
+                                      ManaBase({'Forest': 6, 'Swamp': 1, 'Thornwood Falls': 1, 'Satyr Wayfinder': 1, 'Thoughtseize': 1}),
+                                      3,       # maxturns here
+                                      False 
+                                     )[0][1], # turn number minus 1 here
+                             {'Satyr Wayfinder': 0, 'Thoughtseize': 0} )
+
+    def test_satyr_wayfinder_lands_can_be_played_the_turn_you_find_them_turn_3(self):
+        """You can use wayfinder to get a swamp to cast Thoughtseize!"""
+        self.assertDictEqual(playHand(LineOfPlay([],['Forest', 'Satyr Wayfinder', 'Thoughtseize'],['Thornwood Falls','Forest','Forest','Forest','Forest','Swamp','Forest']),
+                                      ManaBase({'Forest': 6, 'Swamp': 1, 'Thornwood Falls': 1, 'Satyr Wayfinder': 1, 'Thoughtseize': 1}),
+                                      3,       # maxturns here
+                                      False 
+                                     )[0][2], # turn number minus 1 here
+                             {'Satyr Wayfinder': 1, 'Thoughtseize': 1} )
+
+    def test_satyr_wayfinder_doesnt_dig_five_cards_deep_turn_3(self):
+        """You can use wayfinder to get a swamp to cast Thoughtseize!"""
+        self.assertDictEqual(playHand(LineOfPlay([],['Forest', 'Satyr Wayfinder', 'Thoughtseize'],['Thornwood Falls','Forest','Forest','Forest','Forest','Forest','Swamp']),
+                                      ManaBase({'Forest': 6, 'Swamp': 1, 'Thornwood Falls': 1, 'Satyr Wayfinder': 1, 'Thoughtseize': 1}),
+                                      3,       # maxturns here
+                                      False 
+                                     )[0][2], # turn number minus 1 here
+                             {'Satyr Wayfinder': 1, 'Thoughtseize': 0} )
+
+
 if __name__ == '__main__':
     unittest.main()

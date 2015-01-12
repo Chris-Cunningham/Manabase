@@ -17,11 +17,11 @@ Features
 * Multicolored lands are handled properly. Fetchlands and scrylands decisions are implemented as lines of play.
 * The most common corner cases in Khans of Tarkir standard, namely Urborg, Tomb of Yawgmoth, Chained to the Rocks, and Evolving Wilds, are handled appropriately. 
 * Mana abilities of cards like Elvish Mystic, Noble Hierarch, Sylvan Caryatid, and Abzan Banner are implemented, but mana abilities that have a cost (e.g. Signets) silently give wrong results.
-* Casting a spell that allows another spell to be cast that turn also works, e.g. Plains, Plains, Plains, Abzan Banner, Avacyn's Pilgrim, Wingmate Roc successfully casts Avacyn's Pilgrim turn 3 and Wingmate Roc turn 4.
+* Casting a spell that allows another spell to be cast that turn also works, e.g. a hand of three Plains, an Abzan Banner, an Avacyn's Pilgrim, and a Wingmate Roc successfully casts Avacyn's Pilgrim turn 3 and Wingmate Roc turn 4.
+* Satyr Wayfinder is implemented, and he can even get lands that get played that turn, casting spells that turn.
 * A comprehensive battery of tests helps ensure that the results we get here are accurate.
 
 To-do
-* Implement Satyr Wayfinder.
 * Implement Courser of Kruphix.
 * Implement card draw spells.
 * Implement Nykthos.

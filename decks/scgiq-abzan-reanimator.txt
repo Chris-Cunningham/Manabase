@@ -1,0 +1,40 @@
+2 Elvish Mystic
+2 Hornet Queen
+4 Satyr Wayfinder
+4 Siege Rhino
+1 Soul of Innistrad
+1 Soul of Theros
+4 Sylvan Caryatid
+2 Wingmate Roc
+2 Boon Satyr
+2 Doomwake Giant
+1 Polukranos, World Eater
+Lands (24)
+
+2 Forest
+1 Plains
+4 Caves of Koilos
+4 Llanowar Wastes
+2 Sandsteppe Citadel
+4 Temple of Malady
+2 Temple of Plenty
+1 Temple of Silence
+3 Windswept Heath
+1 Urborg, Tomb of Yawgmoth
+Spells (11)
+
+2 Hero's Downfall
+4 Murderous Cut
+3 Whip of Erebos
+2 See the Unwritten
+Sideboard
+
+1 Doomwake Giant
+2 Abzan Charm
+3 Bile Blight
+1 Erase
+2 Utter End
+2 End Hostilities
+1 Glare of Heresy
+3 Thoughtseize
+4 Caves of Koilos

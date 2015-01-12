@@ -1,0 +1,39 @@
+Creatures (26)
+
+4 Heir of the Wilds
+3 Rattleclaw Mystic
+1 Reclamation Sage
+4 Savage Knuckleblade
+4 Stormbreath Dragon
+4 Sylvan Caryatid
+3 Courser of Kruphix
+3 Polukranos, World Eater
+Lands (23)
+
+2 Forest
+2 Mountain
+4 Frontier Bivouac
+1 Mana Confluence
+3 Shivan Reef
+1 Temple of Abandon
+1 Temple of Epiphany
+1 Temple of Mystery
+4 Wooded Foothills
+4 Yavimaya Coast
+Spells (11)
+
+1 Dig Through Time
+1 Force Away
+3 Stubborn Denial
+2 Temur Charm
+4 Crater's Claws
+Sideboard
+
+2 Reclamation Sage
+1 Dig Through Time
+3 Disdainful Stroke
+2 Force Away
+2 Stoke the Flames
+1 Stubborn Denial
+3 Anger of the Gods
+1 Arc Lightning

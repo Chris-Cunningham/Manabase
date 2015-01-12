@@ -156,7 +156,7 @@ class ManaBase:
 			elif card not in manaDatabase:
 				# Okay, we're going to try to find all the mana dorks, manarocks, and other cards that could affect our mana.
 				if debug['parseMana']: print('Parsing nonland card:',card)
-				if card is 'Satyr Wayfinder':
+				if card == 'Satyr Wayfinder':
 					spellDatabase['Satyr Wayfinder'] = ('Land from the Top', 4)
 				elif 'text' in cardDatabase[cardName(card)]:
 					# Manadorks and rocks should have these phrases:
@@ -380,15 +380,15 @@ def manaSourcesAvailable(lineofplay, manaBase, this_turn):
 		for cardplayedthisturn in lineofplay.plays[this_turn-1]:
 			cardname = cardName(cardplayedthisturn)
 			# The only way a land is not available is if the land is explicitly tapped because of Evolving Wilds, or if it has text that contains the word 'tapped' but it is not a shockland.
-			if isLand(cardname) and 'text' in cardDatabase[cardname]:
+			if isLand(cardname) and 'text' in cardDatabase[cardname] and cardname in availablecards:
 				if 'tapped' in cardDatabase[cardname]['text'] and 'you may pay 2 life' not in cardDatabase[cardname]['text']:
 					availablecards.remove(cardname)
-			elif cardname is not cardplayedthisturn:
+			elif cardname is not cardplayedthisturn and cardname in availablecards:
 				if cardplayedthisturn[1:7] == 'Tapped':
 					availablecards.remove(cardname)
 
 			# A creature is unusable if it entered play this turn as well. TODO: Dryad Arbor, I guess, ugh why
-			if isCreature(cardname):
+			if isCreature(cardname) and cardname in availablecards:
 				if 'text' in cardDatabase[cardname]:
 					# Are there hasty mana guys? who knows. If there are, we will let them be available. Lol.
 					if 'Haste' not in cardDatabase[cardname]['text']:
@@ -988,7 +988,7 @@ def playTurn(lineofplay, manaBase, spellsthistrial, caststhistrial, lineOfPlayCo
 
 	if slowMode: 
 		if slowModeWait.lower() == 'skip':
-			print(displayWithPlays(spacing(this_turn, lineOfPlayCounter)+'Now starting turn '+str(this_turn)+ 'with hand: '+str(lineofplay.hand), lineofplay))
+			print(displayWithPlays(spacing(this_turn, lineOfPlayCounter)+'Now starting turn '+str(this_turn)+ ' with hand: '+str(lineofplay.hand), lineofplay))
 		else:
 			slowModeWait = input(displayWithPlays(spacing(this_turn, lineOfPlayCounter)+'Now starting turn '+str(this_turn)+' with hand: '+str(lineofplay.hand), lineofplay))
 
@@ -1215,11 +1215,11 @@ def castSpells(lineofplay, manaBase, turn, spellsthistrial, caststhistrial, line
 
 	# The only spells we are counting are opening hand spells. Those are stored in spellsthistrial. But since we are using some spells for mana, we need to try casting everything in hand or in opening hand.
 	for card in set([spell for spell in lineofplay.hand if not isLand(spell)]).union(spellsthistrial):
-		if card not in caststhistrial[turn-1] and cardName(card) not in manaBase.manaDatabase:
+		if card not in caststhistrial[turn-1] and cardName(card) not in manaBase.manaDatabase and cardName(card) not in manaBase.spellDatabase:
 			# We don't need to care about non-manaproducing spells if they weren't in the opening hand.
 			# TODO: Courser or card draw spells do matter.
 			continue 
-		elif card in caststhistrial[turn-1] and cardName(card) not in manaBase.manaDatabase:
+		elif card in caststhistrial[turn-1] and cardName(card) not in manaBase.manaDatabase and cardName(card) not in manaBase.spellDatabase:
 			if caststhistrial[turn-1][card] == 1:
 				# We don't need to care about non-manaproducing spells if we already found a way to cast them earlier.
 				# TODO: Courser or card draw spells do matter.
@@ -1258,13 +1258,13 @@ def castSpells(lineofplay, manaBase, turn, spellsthistrial, caststhistrial, line
 			if slowMode: print(spacing(turn, lineOfPlayCounter)+'Successfully paid cost for',card,'... we found',manaCost,'in', manaSources,'on turn '+str(turn)+'.')
 			# If the mana is doable, let's make sure we don't have any other requirements, like Chained to the Rocks:
 			if card == 'Chained to the Rocks':
-				if slowMode: print(spacing(turn, lineOfPlayCounter)+'Well, the mana is okay, but there are other requirements to check for '+card+'.')
+				if slowMode: print(spacing(turn, lineOfPlayCounter)+'Well, the mana is okay, but there are other requirements to check for '+card+'...')
 				haveMountain = 0
 				for play in lineofplay.plays:
 					for card2 in play:  # Technically an Elvish Mystic might be in here, but it's okay; I guess if we cast a Mountain Creature somehow, you could Chain to it.
 						if 'subtypes' in cardDatabase[cardName(card2)]:
 							if 'Mountain' in cardDatabase[cardName(card2)]['subtypes']:
-								if slowMode: print(spacing(turn, lineOfPlayCounter)+'We successfully cast a turn '+str(turn)+' '+card+'.')
+								if slowMode: print(spacing(turn, lineOfPlayCounter)+'*** We successfully cast a turn '+str(turn)+' '+card+'.')
 								# Okay, it's cool that the spell was castable, but if it isn't in our hand anymore, we don't want to return it.
 								if card in lineofplay.hand: spellsToCast.append(card)
 								# Again: only count spells that were in our opening hand.
@@ -1273,7 +1273,7 @@ def castSpells(lineofplay, manaBase, turn, spellsthistrial, caststhistrial, line
 										caststhistrial[i-1][card] = 1
 			else:
 				# We aren't incrementing this; it is a flag 0 or 1.
-				if slowMode: print(spacing(turn, lineOfPlayCounter)+'We successfully cast a turn '+str(turn)+' '+card+'.')
+				if slowMode: print(spacing(turn, lineOfPlayCounter)+'*** We successfully cast a turn '+str(turn)+' '+card+'.')
 				# Okay, it's cool that the spell was castable, but if it isn't in our hand anymore, we don't want to return it.
 				if card in lineofplay.hand: spellsToCast.append(card)
 				# Again: only count spells that were in our opening hand. 
@@ -1288,7 +1288,7 @@ def castSpells(lineofplay, manaBase, turn, spellsthistrial, caststhistrial, line
 	# We don't actually want to cast very many spells. For now, the only ones we care about are in the manaDatabase.
 	# TODO: Courser, Card Draw Spells
 	for spell in spellsToCast:
-		if spell in manaDatabase or spell in spellDatabase:
+		if cardName(spell) in manaDatabase or cardName(spell) in spellDatabase:
 			# This one is a mana producer or somehow affects our mana, so make a new line of play where we cast this.
 			if spell in lineofplay.hand: weCouldNotCastAnythingInOurHand = False
 			newlineofplay = deepcopy(lineofplay)
@@ -1299,19 +1299,31 @@ def castSpells(lineofplay, manaBase, turn, spellsthistrial, caststhistrial, line
 			else:
 				newlineofplay.plays[newlineofplay.turn()-1].append(newlineofplay.hand.pop(i))
 
-			if spell in spellDatabase:
+			if cardName(spell) in spellDatabase:
 				# In theory we will map various cards to various effects in the ManaBase class at some point. For now, we've implemented "lands off the top" for wayfinder.
-				if spellDatabase[cardName(card)][0] is 'Land from the Top':
-					cardsToLookAt = spellDatabase[cardName(card)][1]
-					for i in range(cardsToLookAt):
-						if isLand(deck[i]):
+				if spellDatabase[cardName(spell)][0] == 'Land from the Top':
+					numberOfCardsToLookAt = spellDatabase[cardName(spell)][1]
+					cardsWeAlreadyDrew = []
+					for i in range(numberOfCardsToLookAt):
+						if isLand(newlineofplay.deck[i]) and newlineofplay.deck[i] not in cardsWeAlreadyDrew:
 							# Make a new line of play where we put this land into our hand.
-							pass
-
+							newlineofplay2 = deepcopy(newlineofplay)
+							landWeFound = newlineofplay2.deck.pop(i)
+							cardsWeAlreadyDrew.append(landWeFound)
+							newlineofplay2.hand.append(landWeFound)
+							# Put the rest of the cards in the graveyard.
+							for i in range(numberOfCardsToLookAt - 1):
+								x = newlineofplay2.deck.pop(0)
+							lineOfPlayCounter += 1
+							if slowMode: print(displayWithPlays(spacing(turn, lineOfPlayCounter)+'Making a line of play where '+spell+' draws us a '+landWeFound, newlineofplay2))
+							linesofplay.append(newlineofplay2)
+					if slowMode: print(spacing(turn, lineOfPlayCounter)+'(The line below is the one where '+spell+' draws us nothing)')
+	
 			# Keep going, if we should.
 			# Here, a land for turn has already been played, so if turn() is 4 and maxturns is 4, we actually don't want to play another turn.
-			if newlineofplay.turn() < maxturns:
-				if slowMode: print(spacing(turn, lineOfPlayCounter)+'Making a line of play where we cast',spell,'and remember we cast it.')
+			if newlineofplay.turn() <= maxturns:
+				lineOfPlayCounter += 1
+				if slowMode: print(displayWithPlays(spacing(turn, lineOfPlayCounter)+'Making a line of play where we cast '+spell+' and remember we cast it.', newlineofplay))
 				linesofplay.append(newlineofplay)
 
 	if weCouldNotCastAnythingInOurHand and not prelanddrop:
@@ -1615,8 +1627,8 @@ if __name__ == "__main__":
 	# temp -- If you want to run a unit test in slow mode, paste it here.
 	#slowMode = True
 	#slowModeWait = ''
-	#playHand(LineOfPlay([],['Evolving Wilds','Elvish Mystic','Frenzied Goblin','Fanatic of Xenagos', 'Polukranos, World Eater'],['Mountain','Island','Island','Forest','Mountain']),
-    #                                  ManaBase({'Evolving Wilds': 1,'Elvish Mystic': 1,'Frenzied Goblin': 1,'Fanatic of Xenagos': 1,'Island': 3,'Forest': 1,'Mountain': 1, 'Polukranos, World Eater': 1}),
+	#playHand(LineOfPlay([],['Plains','Forest','Satyr Wayfinder','Chained to the Rocks'],['Plains','Plains','Plains','Island','Mountain','Plains','Plains','Plains']),
+    #                                  ManaBase({'Plains': 7, 'Island': 1, 'Forest': 1, 'Mountain': 1, 'Satyr Wayfinder': 1, 'Chained to the Rocks': 1}),
     #                                  3,       # maxturns here
     #                                  False 
     #                                 )

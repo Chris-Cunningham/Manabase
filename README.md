@@ -3,13 +3,25 @@ Manabase
 
 A simulator that runs a Magic: The Gathering deck through repeated trials to determine the effectiveness of the deck's mana.
 
+The output you get will say something like: "Siege Rhino, Turn 4: 70%."
+What this means, precisely, is: If 
+	you are on the play, and 
+	you follow a very specific mulligan strategy, and in doing so,
+	you end up with a Siege Rhino in your opening hand, 
+	then you have a 70% chance of casting it by turn 4.
+
+This would actually be a very high rate -- a deck with 24 basic lands only casts its 4-drops on time 65.5% of the time.
+
+========
+
 To use the tool, you will need a Python interpreter (this was tested with Python 3.4, see https://www.python.org/download/releases/3.4.0/) and decklists in text format.
 
 I'm not a professional programmer, so suggestions and constructive criticism about the tool are welcome!
 
-Current featurelist/todo:
 
 Features
+========
+
 * Given a decklist, the program shuffles the deck, draws an initial hand, and then simply tries all possible lines of play to see if any of them lead to spells being castable. 
 * The lines of play can be printed to the screen for the user's inspection, or played silently to collect data as quickly as possible.
 * Aggregate results are stored over multiple sets of trials and can be output in text format or HTML files via a minimal user interface.
@@ -22,7 +34,9 @@ Features
 * A comprehensive battery of tests helps ensure that the results we get here are accurate.
 
 To-do
-* Allow an option to scale the percentages so that not making land drops doesn’t count against a spell's castability.
+========
+
+* Allow an option to scale the percentages so that not making land drops doesn’t count against a spell's castability. (First step complete -- we can now calculate benchmarks)
 * Implement card draw spells.
 * Implement Nykthos.
 * Track pain taken from painlands and fetches somehow; track life gained from lands and Courser.
@@ -30,10 +44,13 @@ To-do
 * Do something intelligent with sideboards.
 
 Not Planned
+========
+
 * X spells will probably always be treated as though X = 0.
 * Delve and other alternate cost mechanics are probably forever ignored. If you want to check whether you have double blue by turn 5, replace Dig Through Time with Tidebinder Mage in your decklist.
 * Fetching will never shuffle your library, meaning it does not exactly work correctly with scry; if it did, another fix would be needed to prevent “prescient fetching.” Courser will turn every fetchland into an untapped scryland, which is pretty close.
 * “Curving out”: If your hand is Temple, Mountain, then you can’t cast both your one-drop and your two-drop on curve, but the program notices that you can do either one, so both will probably always count as castable.
- 
-In case it wasn't clear, this kind of analysis is definitely inspired by Frank Karsten's Frank Analysis series, especially the article here: http://www.channelfireball.com/articles/frank-analysis-how-many-colored-mana-sources-do-you-need-to-consistently-cast-your-spells/ . 
 
+========
+
+In case it wasn't clear, this kind of analysis is definitely inspired by Frank Karsten's Frank Analysis series, especially the article here: http://www.channelfireball.com/articles/frank-analysis-how-many-colored-mana-sources-do-you-need-to-consistently-cast-your-spells/ . 

@@ -461,6 +461,137 @@ def toposort(data):
 	# if it loops around and everything gets destroyed, then we have a cyclic dependency.
 	assert not data, "Cyclic dependencies exist among these items:\n%s" % '\n'.join(repr(x) for x in data.items())
 
+def comb(n, k):
+	"""Simple combinations function, the number of ways to choose
+	k objects from n given objects.
+
+	>>> print(comb(7, 3))
+	35
+	>>> print(comb(7, 0))
+	1
+	"""
+	if is_int(n) and is_int(k):
+		if k >= 0 and k <= n:
+			return int(math.factorial(n) / (math.factorial(k) * math.factorial(n-k)))
+		else:
+			return 0
+	else:
+		raise ValueError('Can\'t take factorials of non-integers; you passed %n and %k to comb().' % (n, k))
+
+def hypergeometricdistribution(draws, decksize, successes):
+	"""Given the number of cards you see, the number of cards in your deck,
+	and the number of lands in the deck, returns the probability distribution
+	of drawing various numbers of lands.
+
+	>>> print(hypergeometricdistribution(7,60,24))
+	{0: 0.02161452725911799, 1: 0.12104135265106074, 2: 0.26941462364268354, 3: 0.30870425625724157, 4: 0.1964481630727901, 5: 0.06933464579039651, 6: 0.012546269238262225, 7: 0.0008961620884473018}
+	>>> print(hypergeometricdistribution(0,60,24))
+	{0: 1.0}
+	"""
+	# The probability of getting 2 lands in a 7 card hand given a 60-card deck of 24 lands is
+	# (24 choose 2) lands times (36 choose 5) spells divided by (60 choose 7) ways to get those.
+	distribution = {}
+	for i in range(draws+1):
+		distribution[i] = (comb(successes, i) * comb(decksize - successes, draws - i) / comb(decksize, draws))
+	return distribution
+
+def baselinepercentages(decksize, landsindeck, onthedraw = False):
+	"""Given a deck size and the number of lands in the deck, this returns
+	how often you should expect to keep various sized hands and how often
+	you would expect to be able to cast various spells.
+
+	>>> print(baselinepercentages(60, 24)[0])
+	{4: 0.003032034748519207, 5: 0.03644270199141307, 6: 0.11662357449695596, 7: 0.8439016887631118}
+	>>> print(baselinepercentages(60, 24)[1])
+	{1: 0.9996141659673354, 2: 0.9928329519858352, 3: 0.8524984479014863, 4: 0.6548921060230839, 5: 0.45734589642095946}
+	"""
+	probabilityofmulligan = {}
+	# We mulligan 7 card hands if we draw 0, 1, 6, or 7 lands.
+	probabilityofmulligan[7] = 0
+	for i in [0, 1, 6, 7]:
+		probabilityofmulligan[7] += hypergeometricdistribution(7,decksize,landsindeck)[i]
+	# We mulligan 6 card hands if we draw 0, 1, 5, or 6 lands.
+	probabilityofmulligan[6] = 0
+	for i in [0, 1, 5, 6]:
+		probabilityofmulligan[6] += hypergeometricdistribution(6,decksize,landsindeck)[i]
+	# We mulligan 5 card hands if we draw 0, 5 lands.
+	probabilityofmulligan[5] = 0
+	for i in [0, 5]:
+		probabilityofmulligan[5] += hypergeometricdistribution(5,decksize,landsindeck)[i]
+	# We never mulligan 4 card hands.
+	probabilityofmulligan[4] = 0
+
+	# Now figure out what is the probability of keeping various-sized hands.
+	probabilityofkeep = {}
+	probabilityofkeep[7] = (1 - probabilityofmulligan[7])
+	probabilityofkeep[6] = (1 - probabilityofmulligan[6])*probabilityofmulligan[7]
+	probabilityofkeep[5] = (1 - probabilityofmulligan[5])*probabilityofmulligan[7]*probabilityofmulligan[6]
+	probabilityofkeep[4] = (1 - probabilityofmulligan[4])*probabilityofmulligan[7]*probabilityofmulligan[6]*probabilityofmulligan[5]
+	# probabilityofkeep is now a dictionary that gives the probability of keeping x cards with y lands. probabilityofkeep is a probability distribution; it adds to 1.
+
+	# Okay. Now the more complicated calculation, which is essentially the one from Karsten's article. We need to find
+	# the probability that if we keep an n card hand, that after cmc-1 or cmc more draws, we can cast a spell that costs cmc.
+	# Since we only keep good hands, the probabilities aren't independent and we have to go back to the hypergeometric distribution.
+	wekept = {}
+	wekept[(7, 2)] = hypergeometricdistribution(7,decksize,landsindeck)[2] 
+	wekept[(7, 3)] = hypergeometricdistribution(7,decksize,landsindeck)[3] 
+	wekept[(7, 4)] = hypergeometricdistribution(7,decksize,landsindeck)[4] 
+	wekept[(7, 5)] = hypergeometricdistribution(7,decksize,landsindeck)[5]
+	wekept[(6, 2)] = hypergeometricdistribution(6,decksize,landsindeck)[2] * probabilityofmulligan[7]
+	wekept[(6, 3)] = hypergeometricdistribution(6,decksize,landsindeck)[3] * probabilityofmulligan[7]
+	wekept[(6, 4)] = hypergeometricdistribution(6,decksize,landsindeck)[4] * probabilityofmulligan[7]
+	wekept[(5, 1)] = hypergeometricdistribution(5,decksize,landsindeck)[1] * probabilityofmulligan[7] *  probabilityofmulligan[6]
+	wekept[(5, 2)] = hypergeometricdistribution(5,decksize,landsindeck)[2] * probabilityofmulligan[7] *  probabilityofmulligan[6]
+	wekept[(5, 3)] = hypergeometricdistribution(5,decksize,landsindeck)[3] * probabilityofmulligan[7] *  probabilityofmulligan[6]
+	wekept[(5, 4)] = hypergeometricdistribution(5,decksize,landsindeck)[4] * probabilityofmulligan[7] *  probabilityofmulligan[6]
+	wekept[(4, 0)] = hypergeometricdistribution(4,decksize,landsindeck)[0] * probabilityofmulligan[7] *  probabilityofmulligan[6] *  probabilityofmulligan[5]
+	wekept[(4, 1)] = hypergeometricdistribution(4,decksize,landsindeck)[1] * probabilityofmulligan[7] *  probabilityofmulligan[6] *  probabilityofmulligan[5]
+	wekept[(4, 2)] = hypergeometricdistribution(4,decksize,landsindeck)[2] * probabilityofmulligan[7] *  probabilityofmulligan[6] *  probabilityofmulligan[5]
+	wekept[(4, 3)] = hypergeometricdistribution(4,decksize,landsindeck)[3] * probabilityofmulligan[7] *  probabilityofmulligan[6] *  probabilityofmulligan[5]
+	wekept[(4, 4)] = hypergeometricdistribution(4,decksize,landsindeck)[4] * probabilityofmulligan[7] *  probabilityofmulligan[6] *  probabilityofmulligan[5]
+	# wekept is now a dictionary that gives the probability of keeping x cards with y lands. wekept is a probability distribution; it adds to 1.
+
+	# Now we want to evaluate the probability of casting a specific spell in our deck. So we don't care about all these hands -- just the ones with our spell.
+	# If the hand has k spells in it and 4 of our N spells in the deck are the spell we care about, then the probability is hypergeo again.
+	wekeptourspell = {}
+	probability_we_have_our_spell = 0
+	for (cards_in_hand, lands_in_hand) in wekept:
+		our_spell_is_here = 0
+		for number_of_draws_of_our_spell in range(1, cards_in_hand - lands_in_hand + 1):
+			our_spell_is_here += hypergeometricdistribution(cards_in_hand - lands_in_hand, decksize - landsindeck, 4)[number_of_draws_of_our_spell]
+		probability = wekept[(cards_in_hand, lands_in_hand)] * our_spell_is_here
+		probability_we_have_our_spell += probability
+		wekeptourspell[(cards_in_hand, lands_in_hand)] = probability
+	# Now we have figured out the total probability of drawing our spell, and the way those draws were distributed among various hand types.
+
+	# Now we can make the probability distribution of what our hand looks like ASSUMING we have our spell in hand.
+	for (cards_in_hand, lands_in_hand) in wekeptourspell:
+		wekeptourspell[(cards_in_hand, lands_in_hand)] = wekeptourspell[(cards_in_hand, lands_in_hand)] / probability_we_have_our_spell
+	# wekeptourspell should now be a probability distribution, so it should add to 1.
+
+	# Given that we kept a hand with a certain number of cards and a certain number of lands, we want to know if we can cast spells on time.
+	castontime = {}
+	failtocastontime = {}
+	for cmc in range(1, 5+1):
+		castontime[cmc] = 0
+		failtocastontime[cmc] = 0
+		additional_cards_to_draw = cmc - 1
+		if onthedraw: additional_cards_to_draw += 1
+		for (handsize,landsinhand) in wekeptourspell:
+			# We need to draw at least lands_needed more lands in the next additional_cards_to_draw draws.
+			lands_needed = cmc - landsinhand
+			# print('Starting with',handsize,'cards of which',landsinhand,'are lands, we need',lands_needed,'more lands in the next',additional_cards_to_draw,'to cast our',cmc,'mana spell on time.')
+			if lands_needed > 0:
+				# We need at least cmc-landsinhand and at most additional_cards_to_draw lands in the next additional_cards_to_draw cards.
+				for additionallands in range(lands_needed, additional_cards_to_draw + 1):
+					castontime[cmc] += wekeptourspell[(handsize, landsinhand)] * hypergeometricdistribution(additional_cards_to_draw, decksize - handsize, landsindeck - landsinhand)[additionallands]
+				for additionallands in range(0, lands_needed):
+					failtocastontime[cmc] += wekeptourspell[(handsize, landsinhand)] * hypergeometricdistribution(additional_cards_to_draw, decksize - handsize, landsindeck - landsinhand)[additionallands]
+			else:
+				castontime[cmc] += wekeptourspell[(handsize, landsinhand)]
+
+	return probabilityofkeep, castontime
+
 def isLand(card):
 	"""Takes a string, looks it up in the global card database, and sees 
 	if 'Land' is in its list of types. Returns boolean True/false.
@@ -635,6 +766,7 @@ def userInterface():
 	print('  4a) Look at cumulative results for *all* of the decks in text format.')
 	print('  4b) Look at cumulative results for *all* of the decks in html format.')
 	print('  4c) Write an html results file for *all* of the decks in html format.')
+	print('   5) See benchmarks for good manabases of various sizes.')
 	print('  -1) Exit.')
 	print('')
 
@@ -726,6 +858,57 @@ def userInterface():
 		# If we got this far, then we displayed everything we could.
 		print('')
 		return userInterface()
+	elif whatToDo == '5':
+		print('This tool uses the hypergeometric distribution to tell you the exact probability of casting certain spells on time assuming:')
+		print('   The deck has all untapped lands that all count toward casting the spell.')
+		print('   You mulligan normally, not prioritizing the spell.')
+		print('   You end up with the spell in your opening hand.')
+		print('')
+		print('How many cards will be in your deck (ex: 60)?')
+		print('')
+		decksize = int(input('>>> '))
+		print('')
+		print('How many lands will be in your deck (ex: 24)?')
+		print('')
+		landsindeck = int(input('>>> '))
+		print('')
+		if landsindeck < 0 or decksize < 0 or landsindeck > decksize:
+			print('Not sure why you typed in nonsense numbers -- did you put them in the wrong order?')
+			print('')
+			return userInterface()
+		else:
+			mulliganstats  = baselinepercentages(decksize, landsindeck, onthedraw = False)[0]
+			statsontheplay = baselinepercentages(decksize, landsindeck, onthedraw = False)[1]
+			statsonthedraw = baselinepercentages(decksize, landsindeck, onthedraw = True)[1]
+			print('************************************************************************')
+			print('Stats for a',decksize,'card deck that has',landsindeck,'basic lands.')
+			print('Mulligan strategy: we mulligan 7-card hands with 0, 1, 6, or 7 lands.')
+			print('                   we mulligan 6-card hands with 0, 1, 5, or 6 lands.')
+			print('                   we mulligan 5-card hands with 0 or 5 lands.')
+			print('                   we never mulligan 4-card hands.')
+			print('************************************************************************')
+			print('')
+			print('Our opening hand has    7 cards   6 cards   5 cards   4 cards:')
+			print('                        '+'{:>6.1%}'.format(mulliganstats[7])+'    '+'{:>6.1%}'.format(mulliganstats[6])+'    '+'{:>6.1%}'.format(mulliganstats[5])+'    '+'{:>6.1%}'.format(mulliganstats[4])+'   ')
+			print('')
+			print('************************************************************************')
+			print('')
+			print('Spells cast on time   On the Draw         On the Play:   ')
+			for cmc in range(1, 6):
+				print('              CMC '+str(cmc)+':    '+'{:>6.1%}'.format(statsonthedraw[cmc])+'              '+'{:>6.1%}'.format(statsontheplay[cmc]))
+			print('')
+			print('************************************************************************')
+			print('')
+			print('You can improve on this with scrylands or other incidental mana fixing.')
+			print('You can improve on this with a more intelligent mulligan strategy.')
+			print('You can get much lower than this by having a multicolored deck. :)')
+			print('')
+			print('************************************************************************')
+			input('Press [Enter] to continue.')
+			print('')
+
+			return userInterface()
+
 	elif whatToDo == '-1':
 		exit('Bye!')
 
@@ -1582,6 +1765,16 @@ def displayResults(displaycasts = None, displaydrawsdictionary = None, displaydr
 	else:
 		cardstoiterate = displaydrawsdictionary
 
+	# It would be nice for display purposes to sort these by cmc, and then alphabetically.
+	sorted_cardstoiterate = []
+	list_of_cmcs = list(set([cardDatabase[card]['cmc'] for card in cardstoiterate]))
+	list_of_cmcs.sort()
+	for cmc in list_of_cmcs:
+		list_of_spells = [card for card in cardstoiterate if cardDatabase[card]['cmc'] == cmc]
+		list_of_spells.sort()
+		sorted_cardstoiterate.extend(list_of_spells)
+
+
 	percents = {}
 	# To justify the text, we need to know the max card length.
 	maxcardlength = max([len(card) for card in cardstoiterate])
@@ -1597,7 +1790,7 @@ def displayResults(displaycasts = None, displaydrawsdictionary = None, displaydr
 	else:
 		header = ''
 
-	for card in cardstoiterate:
+	for card in sorted_cardstoiterate:
 		if 'text' in displayformat: percents[card] = ' '*(maxcardlength - len(card)) + card
 		if 'html' in displayformat: percents[card] = '<tr><td align=right>'+card+'</td>'
 
@@ -1639,7 +1832,7 @@ def displayResults(displaycasts = None, displaydrawsdictionary = None, displaydr
 
 	if 'print' in displayformat:
 		print(header)
-		for card in cardstoiterate:
+		for card in sorted_cardstoiterate:
 			print(percents[card])
 
 	if 'file' in displayformat:
@@ -1648,7 +1841,7 @@ def displayResults(displaycasts = None, displaydrawsdictionary = None, displaydr
 			with open(htmlfile,'w') as f:
 				f.write('<html><head>Results for '+deckfile)
 				f.write(header)
-				for card in cardstoiterate:
+				for card in sorted_cardstoiterate:
 					f.write(percents[card])
 				f.write('</html>')
 			print('HTML successfully output to',htmlfile)

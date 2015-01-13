@@ -1,0 +1,30 @@
+CREATURES (23)
+
+1 Birds of Paradise
+4 Noble Hierarch
+4 Tarmogoyf
+4 Wild Nacatl
+4 Geist of Saint Traft
+2 Qasali Pridemage
+4 Siege Rhino
+SPELLS (15)
+
+3 Path to Exile
+4 Lightning Bolt
+4 Tribal Flames
+2 Abrupt Decay
+2 Bant Charm
+LAND (22)
+
+2 Bloodstained Mire
+1 Breeding Pool
+4 Flooded Strand
+1 Forest
+1 Godless Shrine
+1 Plains
+1 Sacred Foundry
+1 Stomping Ground
+1 Temple Garden
+4 Verdant Catacombs
+1 Watery Grave
+4 Windswept Heath

@@ -3,21 +3,22 @@ Manabase
 
 A simulator that runs a Magic: The Gathering deck through repeated trials to determine the effectiveness of the deck's mana.
 
-The output you get will say something like: "Siege Rhino, Turn 4: 70%."
-What this means, precisely, is: If 
-	you are on the play, and 
-	you follow a very specific mulligan strategy, and in doing so,
-	you end up with a Siege Rhino in your opening hand, 
-	then you have a 70% chance of casting it by turn 4.
-
-This would actually be a very high rate -- a deck with 24 basic lands only casts its 4-drops on time 65.5% of the time.
-
-========
-
 To use the tool, you will need a Python interpreter (this was tested with Python 3.4, see https://www.python.org/download/releases/3.4.0/) and decklists in text format.
 
 I'm not a professional programmer, so suggestions and constructive criticism about the tool are welcome!
 
+The Output
+========
+
+The output you get will say something like: "**Siege Rhino, Turn 4: 70%.**"
+
+What this means, precisely, is: If 
+	* you are on the play, and 
+	* you follow a very specific mulligan strategy, and in doing so,
+	* you end up with a Siege Rhino in your opening hand, 
+	* then you have a 70% chance of casting it by turn 4.
+
+**This would actually be a very high rate** -- a deck with 24 basic lands only casts its 4-drops on time 65.5% of the time.
 
 Features
 ========
@@ -51,6 +52,7 @@ Not Planned
 * Fetching will never shuffle your library, meaning it does not exactly work correctly with scry; if it did, another fix would be needed to prevent “prescient fetching.” Courser will turn every fetchland into an untapped scryland, which is pretty close.
 * “Curving out”: If your hand is Temple, Mountain, then you can’t cast both your one-drop and your two-drop on curve, but the program notices that you can do either one, so both will probably always count as castable.
 
+See Also
 ========
 
 In case it wasn't clear, this kind of analysis is definitely inspired by Frank Karsten's Frank Analysis series, especially the article here: http://www.channelfireball.com/articles/frank-analysis-how-many-colored-mana-sources-do-you-need-to-consistently-cast-your-spells/ . 

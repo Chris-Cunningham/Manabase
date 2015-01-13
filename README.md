@@ -12,15 +12,12 @@ The Output
 
 The output you get will say something like: "**Siege Rhino, Turn 4: 70%.**"
 
-What this means, precisely, is: If 
+What this means, precisely, is: 
 
-	* you are on the play, and 
-
-	* you follow a very specific mulligan strategy, and in doing so,
-
-	* you end up with a Siege Rhino in your opening hand, 
-
-	* then you have a 70% chance of casting it by turn 4.
+    If   you are on the play, and 
+         you follow a very specific mulligan strategy, and in doing so,
+         you end up with a Siege Rhino in your opening hand, 
+    then you have a 70% chance of casting it by turn 4.
 
 **This would actually be a very high rate** -- a deck with 24 basic lands only casts its 4-drops on time 65.5% of the time.
 

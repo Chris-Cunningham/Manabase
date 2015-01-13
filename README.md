@@ -10,16 +10,16 @@ I'm not a professional programmer, so suggestions and constructive criticism abo
 The Output
 ========
 
-The output you get will say something like: "**Siege Rhino, Turn 4: 70%.**"
+The output you get will say something like: "**Siege Rhino, Turn 4: 69.3%.**"
 
 What this means, precisely, is: 
 
 * If you are on the play, and 
 * you follow a very specific mulligan strategy, and in doing so,
 * you end up with a Siege Rhino in your opening hand, 
-* then you have a 70% chance of casting it by turn 4.
+* then you have a 69.3% chance of casting it by turn 4.
 
-**This would actually be a very high rate** -- a deck with 24 basic lands only casts its 4-drops on time 65.5% of the time.
+**This would actually be a very high rate** -- a deck with 24 basic lands only casts its 4-drops on time 65.5% of the time. It turns out that with only six scrylands, it is actually possible to overcome color problems and even surpass the mana of a deck full of only basics.
 
 Features
 ========

@@ -157,7 +157,9 @@ class ManaBase:
 				# Okay, we're going to try to find all the mana dorks, manarocks, and other cards that could affect our mana.
 				if debug['parseMana']: print('Parsing nonland card:',card)
 				if card == 'Satyr Wayfinder':
-					spellDatabase['Satyr Wayfinder'] = ('Land from the Top', 4)
+					spellDatabase['Satyr Wayfinder'] = ('Dig for a Land', 4)
+				if card == 'Courser of Kruphix':
+					spellDatabase['Courser of Kruphix'] = 'Play Lands From Top of Library'
 				elif 'text' in cardDatabase[cardName(card)]:
 					# Manadorks and rocks should have these phrases:
 					if '{T}: Add' in cardDatabase[cardName(card)]['text'] and 'to your mana pool' in cardDatabase[cardName(card)]['text']:
@@ -1004,7 +1006,12 @@ def playTurn(lineofplay, manaBase, spellsthistrial, caststhistrial, lineOfPlayCo
 	######################################################
 	# linesofplay is a list of lines of play that we will update throughout the turn.
 	# castSpells always at least returns the line of play where we didn't play a spell.
-	lineOfPlayCounter, caststhistrial, linesneedingalanddrop = castSpells(lineofplay, manaBase, this_turn, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
+	# The easiest optimization to do is to break out of the loop if we have already cast every single spell we care about already by this turn.
+	if 0 not in caststhistrial[this_turn-1].values():
+		if slowMode: print(displayWithPlays(spacing(this_turn, lineOfPlayCounter)+'We have successfully cast everything by turn '+str(this_turn)+', so we\'re moving on now.', lineofplay))
+		linesneedingalanddrop = []
+	else:
+		lineOfPlayCounter, caststhistrial, linesneedingalanddrop = castSpells(lineofplay, manaBase, this_turn, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
 
 	######################################################
 	#### Now make a land drop.
@@ -1015,6 +1022,11 @@ def playTurn(lineofplay, manaBase, spellsthistrial, caststhistrial, lineOfPlayCo
 		if line.turn() is not this_turn: 
 			print(line)
 			exit('Wait, a line of play is stuck on the wrong turn number!')
+
+		# The easiest optimization to do is to break out of the loop if we have already cast every single spell we care about already by this turn.
+		if 0 not in caststhistrial[this_turn-1].values():
+			if slowMode: print(displayWithPlays(spacing(this_turn, lineOfPlayCounter)+'We have successfully cast everything by turn '+str(this_turn)+', so we\'re moving on now.', lineofplay))
+			break
 
 		lineOfPlayCounter, newlinesofplay = playLand(line,this_turn,manaBase,spellsthistrial,caststhistrial,lineOfPlayCounter,maxturns)
 		# Keep track of all these lines.
@@ -1041,6 +1053,11 @@ def playTurn(lineofplay, manaBase, spellsthistrial, caststhistrial, lineOfPlayCo
 			return lineOfPlayCounter, caststhistrial, linestoreturn
 
 	for line in linesafterthelanddrop:
+
+		# The easiest optimization to do is to break out of the loop if we have already cast every single spell we care about already by this turn.
+		if 0 not in caststhistrial[this_turn-1].values():
+			if slowMode: print(displayWithPlays(spacing(this_turn, lineOfPlayCounter)+'We have successfully cast everything by turn '+str(this_turn)+', so we\'re moving on now.', lineofplay))
+			break
 
 		lineOfPlayCounter, caststhistrial, newlinesofplay = castSpellsUntilWeCant(line, manaBase, this_turn, spellsthistrial, caststhistrial, lineOfPlayCounter, maxturns)
 		# Keep track of all these lines of play in a list.
@@ -1078,7 +1095,16 @@ def playLand(lineofplay,this_turn,manaBase,spellsthistrial,caststhistrial,lineOf
 
 	# Make a list of lands in the hand.
 	landstotry = [card for card in lineofplay.hand if isLand(card)]
-	manaDatabase, spellDatabase = manaBase.manaDatabase, manaBase.spellDatabase
+
+	# If a Courser of Kruphix (or similar) has been played, then we can also play lands off the top of our deck.
+	spell_allowing_play_from_top_of_deck = None
+	if isLand(lineofplay.deck[0]):
+		for play in lineofplay.plays:
+			for spell in play:
+				if cardName(spell) in manaBase.spellDatabase:
+					if manaBase.spellDatabase[cardName(spell)] == 'Play Lands From Top of Library':
+						spell_allowing_play_from_top_of_deck = spell
+						landstotry.append('(Top of Deck)')
 
 	# Optimization: If all the cards we are checking on have already been cast OR if there are no lands to play, then we don't actually have to even play another land.
 	# Notice that here, if this_turn is 3, then we are actually about to work on turn 3. So we want to check caststhistrial[3-1].
@@ -1086,11 +1112,18 @@ def playLand(lineofplay,this_turn,manaBase,spellsthistrial,caststhistrial,lineOf
 
 		for card in set(landstotry):
 
+			if card == '(Top of Deck)':
+				playing_from_top_of_deck = True
+				card = lineofplay.deck[0]
+			else:
+				playing_from_top_of_deck = False
+
 			# If it is a fetchland, we'll want to make two lines of play for the two fetch options. TODO: Pay 1 life 
-			if 'FetchU' in manaDatabase[cardName(card)] or 'FetchW' in manaDatabase[cardName(card)] or 'FetchB' in manaDatabase[cardName(card)] or 'FetchG' in manaDatabase[cardName(card)] or 'FetchR' in manaDatabase[cardName(card)] or 'FetchBasic' in manaDatabase[cardName(card)]:
+			if 'FetchU' in manaBase.manaDatabase[cardName(card)] or 'FetchW' in manaBase.manaDatabase[cardName(card)] or 'FetchB' in manaBase.manaDatabase[cardName(card)] or 'FetchG' in manaBase.manaDatabase[cardName(card)] or 'FetchR' in manaBase.manaDatabase[cardName(card)] or 'FetchBasic' in manaBase.manaDatabase[cardName(card)]:
 				# Figure out what our fetch options are.
+				we_played_a_fetchland = True
 				fetchoptions = []
-				for fetchOption in manaDatabase[cardName(card)]:
+				for fetchOption in manaBase.manaDatabase[cardName(card)]:
 					if fetchOption == 'FetchU':
 						fetchoptions.append(('subtypes','Island'))
 					elif fetchOption == 'FetchW':
@@ -1114,54 +1147,68 @@ def playLand(lineofplay,this_turn,manaBase,spellsthistrial,caststhistrial,lineOf
 					for i,target in enumerate(lineofplay.deck):
 						if fetch[0] in cardDatabase[cardName(target)]:
 							if fetch[1] in cardDatabase[cardName(target)][fetch[0]]:
-								fetchtargets[target] = i
+								if (not playing_from_top_of_deck) or (playing_from_top_of_deck and i != 0):
+									fetchtargets[target] = i
 
 				if slowMode: print(spacing(this_turn, lineOfPlayCounter)+'Have a fetch with possible targets',fetchtargets)
 
+				we_cracked_a_fetchland = False
 				for target in fetchtargets:
 					newlineofplay = deepcopy(lineofplay)
 					# Remove our card from the hand and away entirely (we don't have a graveyard).
-					newlineofplay.hand.remove(card)
-					# Pop the appropriate card from the deck and into play.
-					i = fetchtargets[target]
-					newlineofplay.plays[this_turn-1].append(newlineofplay.deck.pop(i))	
+					if playing_from_top_of_deck:
+						# Pop the appropriate card from the deck and into play (this is us popping the fetchland off the top).
+						if slowMode: print(displayWithPlays(spacing(this_turn, lineOfPlayCounter)+'Playing a land off the top thanks to '+spell_allowing_play_from_top_of_deck))
+						newlineofplay.plays[this_turn-1].append(newlineofplay.deck.pop(fetchtargets[target]))	
+						newlineofplay.deck.remove(card)
+					else:
+						# Pop the appropriate card from the deck and into play.
+						newlineofplay.plays[this_turn-1].append(newlineofplay.deck.pop(fetchtargets[target]))	
+						newlineofplay.hand.remove(card)
+
 					# Shuffle the deck. Wait! No. If we shuffle the deck, we create a prescience problem where playing a fetch doubles your chances of a good topdeck. Without shuffling, we do the scry/fetch interaction wrong, but that is a much smaller error.
 					# newlineofplay.deck = random.sample(newlineofplay.deck, len(newlineofplay.deck))
 
 					# Check if anything is castable and cast it -- this increments caststhisturn and makes new lines of play for spells we know how to handle, then continues playing.
-					# One thing: we need to tell castSpells that it should not use the Evolving Wilds lands this turn.
-					if 'FetchBasic' in manaDatabase[cardName(card)]:
+					if 'FetchBasic' in manaBase.manaDatabase[cardName(card)]:
 						lineOfPlayCounter += 1
 						newlineofplay.plays[this_turn-1][-1] = '(Tapped) ' + newlineofplay.plays[this_turn-1][-1]
 						if slowMode: print(displayWithPlays(spacing(this_turn, lineOfPlayCounter)+'Found a possible turn '+str(this_turn)+' land drop: '+card+' fetching a tapped '+target,newlineofplay))
 						newlinesofplay.append(newlineofplay)
+						we_cracked_a_fetchland = True
 					else:
 						lineOfPlayCounter += 1
 						if slowMode: print(displayWithPlays(spacing(this_turn, lineOfPlayCounter)+'Found a possible turn '+str(this_turn)+' land drop: '+card+' fetching a '+target,newlineofplay))
 						newlinesofplay.append(newlineofplay)
+						we_cracked_a_fetchland = True
 			else:
+				we_played_a_fetchland = False
+				we_cracked_a_fetchland = False
 				lineOfPlayCounter += 1
 				# Playing a non-fetchland is much easier.
 				newlineofplay = deepcopy(lineofplay)
-				# Pop that card out of the hand and into the plays, then. Where is it?
-				i = newlineofplay.hand.index(card)
-				newlineofplay.plays[this_turn-1].append(newlineofplay.hand.pop(i))
+				if playing_from_top_of_deck:
+					newlineofplay.plays[this_turn-1].append(newlineofplay.deck.pop(0))
+				else:
+					# Pop that card out of the hand and into the plays, then. Where is it?
+					i = newlineofplay.hand.index(card)
+					newlineofplay.plays[this_turn-1].append(newlineofplay.hand.pop(i))
+
 				if slowMode: print(displayWithPlays(spacing(this_turn, lineOfPlayCounter)+'Found a possible turn '+str(this_turn)+' land drop: '+card,newlineofplay))
 				newlinesofplay.append(newlineofplay)
 
-				# If we just played a scryland, then we need to scry to the bottom and cast spells. We only care about this if there are turns left.
-				# lineofplay.turn() was the turn before we played the scryland, so if maxturns is 4 and lineofplay.turn() is 3, we actually don't want to play another turn.
-				if this_turn < maxturns:
-					if 'scry' in manaDatabase[cardName(card)]:
-						# If the land was a scryland, then we also need a line of play where we bottomed the top card.
-						newlineofplay = deepcopy(lineofplay)
-						i = newlineofplay.hand.index(card)
-						newlineofplay.plays[this_turn-1].append(newlineofplay.hand.pop(i))
-						# Put the top card on the bottom of the deck.
-						newlineofplay.deck = newlineofplay.deck[1:] + newlineofplay.deck[:1]
-						lineOfPlayCounter += 1
-						if slowMode: print(displayWithPlays(spacing(this_turn, lineOfPlayCounter)+'Found a possible turn '+str(this_turn)+' land drop: '+card+' and a scry to the bottom',newlineofplay))
-						newlinesofplay.append(newlineofplay)
+			# If we just played a scryland, then we need to scry to the bottom and cast spells. We only care about this if there are turns left.
+			# Here is the thing. If our land drop for the turn was a fetchland and we have a Courser out, we actually get a little extra value in that we can choose to shuffle or not.
+			# This is currently implemented as: if you fetch with a courser out, the fetchland gets a "Scry 1" added to it. This is not correct, but it is approximately correct.
+			if this_turn < maxturns:
+				if 'scry' in manaBase.manaDatabase[cardName(card)] or (we_played_a_fetchland and we_cracked_a_fetchland and playing_from_top_of_deck):
+					# If the land was a scryland, then we also need a line of play where we bottomed the top card.
+					newlineofplay2 = deepcopy(newlineofplay)
+					# Put the top card on the bottom of the deck.
+					newlineofplay2.deck = newlineofplay2.deck[1:] + newlineofplay2.deck[:1]
+					lineOfPlayCounter += 1
+					if slowMode: print(displayWithPlays(spacing(this_turn, lineOfPlayCounter)+'Found a possible turn '+str(this_turn)+' land drop: '+card+' and a scry to the bottom',newlineofplay2))
+					newlinesofplay.append(newlineofplay2)
 
 	else:
 		# All the spells were already cast, so just keep going on to later turns by not playing a land here.
@@ -1301,7 +1348,7 @@ def castSpells(lineofplay, manaBase, turn, spellsthistrial, caststhistrial, line
 
 			if cardName(spell) in spellDatabase:
 				# In theory we will map various cards to various effects in the ManaBase class at some point. For now, we've implemented "lands off the top" for wayfinder.
-				if spellDatabase[cardName(spell)][0] == 'Land from the Top':
+				if spellDatabase[cardName(spell)][0] == 'Dig for a Land':
 					numberOfCardsToLookAt = spellDatabase[cardName(spell)][1]
 					cardsWeAlreadyDrew = []
 					for i in range(numberOfCardsToLookAt):

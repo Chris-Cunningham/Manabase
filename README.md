@@ -18,16 +18,15 @@ Features
 * The most common corner cases in Khans of Tarkir standard, namely Urborg, Tomb of Yawgmoth, Chained to the Rocks, and Evolving Wilds, are handled appropriately. 
 * Mana abilities of cards like Elvish Mystic, Noble Hierarch, Sylvan Caryatid, and Abzan Banner are implemented, but mana abilities that have a cost (e.g. Signets) silently give wrong results.
 * Casting a spell that allows another spell to be cast that turn also works, e.g. a hand of three Plains, an Abzan Banner, an Avacyn's Pilgrim, and a Wingmate Roc successfully casts Avacyn's Pilgrim turn 3 and Wingmate Roc turn 4.
-* Satyr Wayfinder is implemented, and he can even get lands that get played that turn, casting spells that turn.
+* Satyr Wayfinder is implemented, and he can even get lands that get played that turn, casting spells that turn. Courser of Kruphix works as well, and has friendly interactions with fetchlands.
 * A comprehensive battery of tests helps ensure that the results we get here are accurate.
 
 To-do
-* Implement Courser of Kruphix.
+* Allow an option to scale the percentages so that not making land drops doesn’t count against a spell's castability.
 * Implement card draw spells.
 * Implement Nykthos.
 * Track pain taken from painlands and fetches somehow; track life gained from lands and Courser.
 * Implement Checklands (do people use those or care?)
-* Allow an option to scale the percentages so that not making land drops doesn’t count against a spell's castability.
 * Do something intelligent with sideboards.
 
 Not Planned

@@ -28,7 +28,7 @@ Features
 * The lines of play can be printed to the screen for the user's inspection, or played silently to collect data as quickly as possible (thousands of trials per minute).
 * Aggregate results are stored over multiple sets of trials and can be output in text format or HTML tables.
 * A simple mulligan strategy is implemented: 7-card hands with 0, 1, 6, or 7 lands are mulliganed. 6-card hands with 0, 1, 5, or 6 lands are mulliganed. 5-card hands with 0 or 5 lands are mulliganed.
-* Multicolored lands are handled properly. Fetchlands and scrylands are implemented as more branches in the lines of play. Fetchlands correctly fetch shocks if needed.
+* Multicolored lands are handled properly. Fetchlands and scrylands are implemented as more branches in the lines of play. Fetchlands correctly fetch shocks if needed. Checklands work properly with basics and shocks.
 * The most common corner cases in Khans of Tarkir standard, namely Urborg, Tomb of Yawgmoth, Chained to the Rocks, and Evolving Wilds, are handled appropriately. All of KTK standard works except Nykthos.
 * Mana abilities of cards like Elvish Mystic, Noble Hierarch, Sylvan Caryatid, and Abzan Banner are implemented, but mana abilities that have a cost (e.g. Signets) silently give wrong results.
 * Multiple spells can be cast per turn, e.g. a hand of three Plains, an Abzan Banner, an Avacyn's Pilgrim, and a Wingmate Roc successfully casts Avacyn's Pilgrim turn 3 and Wingmate Roc turn 4.
@@ -40,10 +40,10 @@ To-do
 ========
 
 * Allow an option to scale the percentages so that not making land drops doesn’t count against a spell's castability. (First step complete -- we can now calculate benchmarks)
+* Try to identify when something unsupported is in the decklist instead of silently giving nonsense answers.
 * Implement card draw spells.
 * Implement Nykthos.
 * Track pain taken from painlands and fetches somehow; track life gained from lands and Courser.
-* Implement Checklands (do people use those or care?)
 * Do something intelligent with sideboards.
 
 Not Planned

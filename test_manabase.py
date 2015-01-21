@@ -1152,5 +1152,93 @@ class TestPlayHand(unittest.TestCase):
                                      )[0][4], # turn number minus 1 here
                              {'Courser of Kruphix': 1, 'Thoughtseize': 0} )
 
+    def test_checklands_come_into_play_tapped_turn_2(self):
+        """Checklands should come into play tapped turn 2 if the turn 1 land was irrelevant."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Plains','Scavenging Ooze'],['Hinterland Harbor','Cloudfin Raptor','Cloudfin Raptor','Cloudfin Raptor']),
+                                      ManaBase({'Plains': 1, 'Hinterland Harbor': 1}),
+                                      3,       # maxturns here
+                                      False 
+                                     )[0][1], # turn number minus 1 here
+                             {'Scavenging Ooze': 0} )
+
+    def test_checklands_come_into_play_tapped_turn_3(self):
+        """Checklands should come into play tapped turn 2 if the turn 1 land was irrelevant."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Plains','Scavenging Ooze'],['Hinterland Harbor','Cloudfin Raptor','Cloudfin Raptor','Cloudfin Raptor']),
+                                      ManaBase({'Plains': 1, 'Hinterland Harbor': 1}),
+                                      3,       # maxturns here
+                                      False 
+                                     )[0][2], # turn number minus 1 here
+                             {'Scavenging Ooze': 1} )
+
+    def test_checklands_come_into_play_untapped_turn_2(self):
+        """Checklands should come into play untapped turn 2 if the turn 1 land was relevant."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Island','Scavenging Ooze'],['Hinterland Harbor','Cloudfin Raptor','Cloudfin Raptor','Cloudfin Raptor']),
+                                      ManaBase({'Island': 1, 'Hinterland Harbor': 1}),
+                                      3,       # maxturns here
+                                      False 
+                                     )[0][1], # turn number minus 1 here
+                             {'Scavenging Ooze': 1} )
+
+    def test_checklands_come_into_play_tapped_turn_3(self):
+        """Checklands should come into play tapped turn 2 if the turn 1 land was irrelevant."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Island','Scavenging Ooze'],['Hinterland Harbor','Cloudfin Raptor','Cloudfin Raptor','Cloudfin Raptor']),
+                                      ManaBase({'Island': 1, 'Hinterland Harbor': 1}),
+                                      3,       # maxturns here
+                                      False 
+                                     )[0][2], # turn number minus 1 here
+                             {'Scavenging Ooze': 1} )
+
+    def test_checklands_cant_get_fetched(self):
+        """Checklands should come into play tapped turn 2 if the turn 1 land was irrelevant."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Scalding Tarn','Elvish Mystic'],['Hinterland Harbor','Cloudfin Raptor','Cloudfin Raptor','Cloudfin Raptor']),
+                                      ManaBase({'Scalding Tarn': 1, 'Elvish Mystic': 1, 'Hinterland Harbor': 1}),
+                                      3,       # maxturns here
+                                      False 
+                                     )[0][1], # turn number minus 1 here
+                             {'Elvish Mystic': 0} )
+
+    def test_checklands_work_with_shocks_turn_2(self):
+        """Checklands should come into play untapped turn 2 if the turn 1 land was a good shock."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Hallowed Fountain','Scavenging Ooze'],['Hinterland Harbor','Cloudfin Raptor','Cloudfin Raptor','Cloudfin Raptor']),
+                                      ManaBase({'Hallowed Fountain': 1, 'Hinterland Harbor': 1}),
+                                      2,       # maxturns here
+                                      False 
+                                     )[0][1], # turn number minus 1 here
+                             {'Scavenging Ooze': 1} )
+
+    def test_checklands_work_with_fetched_shocks_turn_2(self):
+        """Checklands should come into play untapped turn 2 if the turn 1 land was a good shock."""
+        self.assertDictEqual(playHand(LineOfPlay([],['Scalding Tarn','Scavenging Ooze'],['Hinterland Harbor','Cloudfin Raptor','Cloudfin Raptor','Hallowed Fountain']),
+                                      ManaBase({'Scalding Tarn': 1,'Hallowed Fountain': 1, 'Hinterland Harbor': 1}),
+                                      2,       # maxturns here
+                                      False 
+                                     )[0][1], # turn number minus 1 here
+                             {'Scavenging Ooze': 1} )
+
+    def test_checklands_are_in_the_manadatabase(self):
+        """Just making sure the checklands parse properly."""
+        self.assertListEqual( ManaBase({'Glacial Fortress': 1, 'Drowned Catacomb': 1, 'Dragonskull Summit': 1, 'Rootbound Crag': 1, 'Sunpetal Grove': 1, 'Clifftop Retreat': 1, 'Isolated Chapel': 1, 'Woodland Cemetery': 1, 'Hinterland Harbor': 1, 'Sulfur Falls': 1}).manaDatabase['Glacial Fortress'],
+                            [ManaPool('{W}'), ManaPool('{U}'), 'Check_Plains', 'Check_Island'] )
+        self.assertListEqual( ManaBase({'Glacial Fortress': 1, 'Drowned Catacomb': 1, 'Dragonskull Summit': 1, 'Rootbound Crag': 1, 'Sunpetal Grove': 1, 'Clifftop Retreat': 1, 'Isolated Chapel': 1, 'Woodland Cemetery': 1, 'Hinterland Harbor': 1, 'Sulfur Falls': 1}).manaDatabase['Drowned Catacomb'],
+                            [ManaPool('{U}'), ManaPool('{B}'), 'Check_Island', 'Check_Swamp'] )
+        self.assertListEqual( ManaBase({'Glacial Fortress': 1, 'Drowned Catacomb': 1, 'Dragonskull Summit': 1, 'Rootbound Crag': 1, 'Sunpetal Grove': 1, 'Clifftop Retreat': 1, 'Isolated Chapel': 1, 'Woodland Cemetery': 1, 'Hinterland Harbor': 1, 'Sulfur Falls': 1}).manaDatabase['Dragonskull Summit'],
+                            [ManaPool('{B}'), ManaPool('{R}'), 'Check_Swamp', 'Check_Mountain'] )
+        self.assertListEqual( ManaBase({'Glacial Fortress': 1, 'Drowned Catacomb': 1, 'Dragonskull Summit': 1, 'Rootbound Crag': 1, 'Sunpetal Grove': 1, 'Clifftop Retreat': 1, 'Isolated Chapel': 1, 'Woodland Cemetery': 1, 'Hinterland Harbor': 1, 'Sulfur Falls': 1}).manaDatabase['Rootbound Crag'],
+                            [ManaPool('{R}'), ManaPool('{G}'), 'Check_Mountain', 'Check_Forest'] )
+        self.assertListEqual( ManaBase({'Glacial Fortress': 1, 'Drowned Catacomb': 1, 'Dragonskull Summit': 1, 'Rootbound Crag': 1, 'Sunpetal Grove': 1, 'Clifftop Retreat': 1, 'Isolated Chapel': 1, 'Woodland Cemetery': 1, 'Hinterland Harbor': 1, 'Sulfur Falls': 1}).manaDatabase['Sunpetal Grove'],
+                            [ManaPool('{G}'), ManaPool('{W}'), 'Check_Plains', 'Check_Forest'] )
+        self.assertListEqual( ManaBase({'Glacial Fortress': 1, 'Drowned Catacomb': 1, 'Dragonskull Summit': 1, 'Rootbound Crag': 1, 'Sunpetal Grove': 1, 'Clifftop Retreat': 1, 'Isolated Chapel': 1, 'Woodland Cemetery': 1, 'Hinterland Harbor': 1, 'Sulfur Falls': 1}).manaDatabase['Clifftop Retreat'],
+                            [ManaPool('{R}'), ManaPool('{W}'), 'Check_Plains', 'Check_Mountain'] )
+        self.assertListEqual( ManaBase({'Glacial Fortress': 1, 'Drowned Catacomb': 1, 'Dragonskull Summit': 1, 'Rootbound Crag': 1, 'Sunpetal Grove': 1, 'Clifftop Retreat': 1, 'Isolated Chapel': 1, 'Woodland Cemetery': 1, 'Hinterland Harbor': 1, 'Sulfur Falls': 1}).manaDatabase['Isolated Chapel'],
+                            [ManaPool('{W}'), ManaPool('{B}'), 'Check_Plains', 'Check_Swamp'] )
+        self.assertListEqual( ManaBase({'Glacial Fortress': 1, 'Drowned Catacomb': 1, 'Dragonskull Summit': 1, 'Rootbound Crag': 1, 'Sunpetal Grove': 1, 'Clifftop Retreat': 1, 'Isolated Chapel': 1, 'Woodland Cemetery': 1, 'Hinterland Harbor': 1, 'Sulfur Falls': 1}).manaDatabase['Woodland Cemetery'],
+                            [ManaPool('{B}'), ManaPool('{G}'), 'Check_Swamp', 'Check_Forest'] )
+        self.assertListEqual( ManaBase({'Glacial Fortress': 1, 'Drowned Catacomb': 1, 'Dragonskull Summit': 1, 'Rootbound Crag': 1, 'Sunpetal Grove': 1, 'Clifftop Retreat': 1, 'Isolated Chapel': 1, 'Woodland Cemetery': 1, 'Hinterland Harbor': 1, 'Sulfur Falls': 1}).manaDatabase['Hinterland Harbor'],
+                            [ManaPool('{G}'), ManaPool('{U}'), 'Check_Island', 'Check_Forest'] )
+        self.assertListEqual( ManaBase({'Glacial Fortress': 1, 'Drowned Catacomb': 1, 'Dragonskull Summit': 1, 'Rootbound Crag': 1, 'Sunpetal Grove': 1, 'Clifftop Retreat': 1, 'Isolated Chapel': 1, 'Woodland Cemetery': 1, 'Hinterland Harbor': 1, 'Sulfur Falls': 1}).manaDatabase['Sulfur Falls'],
+                            [ManaPool('{U}'), ManaPool('{R}'), 'Check_Island', 'Check_Mountain'] )
+
+
+
 if __name__ == '__main__':
     unittest.main()

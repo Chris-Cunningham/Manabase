@@ -132,7 +132,7 @@ class ManaBase:
 					# Parse through the text looking for "scry" or "fetch."
 					if 'scry' in cardDatabase[cardName(card)]['text']:
 						manaDatabase[card].append('scry')
-					# This mana confluence catcher is definitely going to cause some false positives; TODO
+					# This mana confluence catcher is definitely going to cause some false positives, like Springleaf Drum; TODO
 					if 'any color' in cardDatabase[cardName(card)]['text']:
 						manaDatabase[card].append(ManaPool('{W}'))
 						manaDatabase[card].append(ManaPool('{U}'))
@@ -152,6 +152,18 @@ class ManaBase:
 							manaDatabase[card].append('FetchG')
 						if 'basic land card' in cardDatabase[cardName(card)]['text']:
 							manaDatabase[card].append('FetchBasic')
+					if 'enters the battlefield tapped unless you control' in cardDatabase[cardName(card)]['text']:
+						if 'Plains' in cardDatabase[cardName(card)]['text']:
+							manaDatabase[card].append('Check_Plains')
+						if 'Island' in cardDatabase[cardName(card)]['text']:
+							manaDatabase[card].append('Check_Island')
+						if 'Swamp' in cardDatabase[cardName(card)]['text']:
+							manaDatabase[card].append('Check_Swamp')
+						if 'Mountain' in cardDatabase[cardName(card)]['text']:
+							manaDatabase[card].append('Check_Mountain')
+						if 'Forest' in cardDatabase[cardName(card)]['text']:
+							manaDatabase[card].append('Check_Forest')
+
 				if debug['parseMana']: print('Parsed as ',manaDatabase[card])
 			elif card not in manaDatabase:
 				# Okay, we're going to try to find all the mana dorks, manarocks, and other cards that could affect our mana.
@@ -377,15 +389,15 @@ def manaSourcesAvailable(lineofplay, manaBase, this_turn):
 			if cardName(card) in manaBase.manaDatabase:
 				availablecards.append(cardName(card))
 
-	# For the one(s) we just played this turn, check whether it is a tapland or a summoning sick creature.
+	# For the one(s) we just played this turn, check whether it is a tapped land or a summoning sick creature.
 	if lineofplay.turn() >= this_turn:
 		for cardplayedthisturn in lineofplay.plays[this_turn-1]:
 			cardname = cardName(cardplayedthisturn)
-			# The only way a land is not available is if the land is explicitly tapped because of Evolving Wilds, or if it has text that contains the word 'tapped' but it is not a shockland.
+			# The only way a land is not available is if the land is explicitly tapped because of Evolving Wilds, or if it has text that contains the word 'tapped' but it is not a shockland or a checkland.
 			if isLand(cardname) and 'text' in cardDatabase[cardname] and cardname in availablecards:
-				if 'tapped' in cardDatabase[cardname]['text'] and 'you may pay 2 life' not in cardDatabase[cardname]['text']:
+				if 'tapped' in cardDatabase[cardname]['text'] and 'you may pay 2 life' not in cardDatabase[cardname]['text'] and 'unless you control' not in cardDatabase[cardname]['text']:
 					availablecards.remove(cardname)
-			elif cardname is not cardplayedthisturn and cardname in availablecards:
+			if cardname is not cardplayedthisturn and cardname in availablecards:
 				if cardplayedthisturn[1:7] == 'Tapped':
 					availablecards.remove(cardname)
 
@@ -959,7 +971,7 @@ def parseDecklist(deckfile):
 	for card in decklist:
 		if card not in cardDatabase:
 			# TODO: Make capitalization friendly so people don't get frustrated by the 'Hero Of Iroas'
-			print('Decklist error: card not found. Check capitalization?',card)
+			print('Decklist error: card not found. Check capitalization, or download the most recent AllCards.json from MTGJSON?',card)
 			exit('Decklist error; sorry!! Fix the decklist and run program again.')
 
 	if sum(decklist.values()) not in [40,60]:
@@ -1371,13 +1383,30 @@ def playLand(lineofplay,this_turn,manaBase,spellsthistrial,caststhistrial,lineOf
 				# Playing a non-fetchland is much easier.
 				newlineofplay = deepcopy(lineofplay)
 				if playing_from_top_of_deck:
-					newlineofplay.plays[this_turn-1].append(newlineofplay.deck.pop(0))
+					card_to_play = newlineofplay.deck.pop(0)
 				else:
-					# Pop that card out of the hand and into the plays, then. Where is it?
 					i = newlineofplay.hand.index(card)
-					newlineofplay.plays[this_turn-1].append(newlineofplay.hand.pop(i))
+					card_to_play = newlineofplay.hand.pop(i)
 
-				if slowMode: print(displayWithPlays(spacing(this_turn, lineOfPlayCounter)+'Found a possible turn '+str(this_turn)+' land drop: '+card,newlineofplay))
+				# If the land that came into play was a checkland, then we need to do the check.
+				list_of_types_to_check = [checkOption for checkOption in ['Check_Plains','Check_Island','Check_Swamp','Check_Mountain','Check_Forest'] if checkOption in manaBase.manaDatabase[card_to_play]]
+				if len(list_of_types_to_check) > 0:
+					comes_into_play_tapped = True
+					for checktext in list_of_types_to_check:
+						type_to_check = checktext[6:]
+						for play in newlineofplay.plays:
+							for land in play:
+								if type_to_check in cardDatabase[land]['subtypes']:
+									comes_into_play_tapped = False
+					if comes_into_play_tapped:
+						card_to_play = '(Tapped) '+card_to_play
+
+				if playing_from_top_of_deck:
+					newlineofplay.plays[this_turn-1].append(card_to_play)
+				else:
+					newlineofplay.plays[this_turn-1].append(card_to_play)
+
+				if slowMode: print(displayWithPlays(spacing(this_turn, lineOfPlayCounter)+'Found a possible turn '+str(this_turn)+' land drop: '+card_to_play,newlineofplay))
 				newlinesofplay.append(newlineofplay)
 
 			# If we just played a scryland, then we need to scry to the bottom and cast spells. We only care about this if there are turns left.
@@ -1773,7 +1802,6 @@ def displayResults(displaycasts = None, displaydrawsdictionary = None, displaydr
 		list_of_spells = [card for card in cardstoiterate if cardDatabase[card]['cmc'] == cmc]
 		list_of_spells.sort()
 		sorted_cardstoiterate.extend(list_of_spells)
-
 
 	percents = {}
 	# To justify the text, we need to know the max card length.

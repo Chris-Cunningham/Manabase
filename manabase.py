@@ -772,13 +772,8 @@ def userInterface():
 	print('   0) Run one trial of one of those decks in slow motion to watch it happen.')
 	print('   1) Run many trials of one of those decks.')
 	print('   2) Run many trials of all of those decks (takes lots of time!)')
-	print('  3a) Look at cumulative results for *one* of the decks in text format.')
-	print('  3b) Look at cumulative results for *one* of the decks in html format.')
-	print('  3c) Write an html results file for *one* of the decks in html format.')
-	print('  4a) Look at cumulative results for *all* of the decks in text format.')
-	print('  4b) Look at cumulative results for *all* of the decks in html format.')
-	print('  4c) Write an html results file for *all* of the decks in html format.')
-	print('   5) See benchmarks for good manabases of various sizes.')
+	print('   3) Look at the results in some way.')
+	print('   4) See benchmarks for good manabases of various sizes.')
 	print('  -1) Exit.')
 	print('')
 
@@ -839,12 +834,35 @@ def userInterface():
 		print('')
 		return deckdirectory, maxturns, trials, False, True
 
-	elif whatToDo in ['3a','3b','3c','4a','4b','4c']:
-		if whatToDo[1] == 'a': displayformats = ['text', 'print']
-		if whatToDo[1] == 'b': displayformats = ['html', 'print']
-		if whatToDo[1] == 'c': displayformats = ['html', 'file']
+	elif whatToDo == '3':
 
-		if whatToDo[0] == '3':
+		print('Okay, how do you want to see the results?')
+
+		print('  1a) One deck, Text.')
+		print('  1b) One deck, HTML.')
+		print('  1c) One deck, Write an HTML File.')
+		print('  1d) One deck, Reddit Markdown.')
+		print('  2a) All decks, Text Format.')
+		print('  2b) All decks, HTML Format.')
+		print('  2c) All decks, Write HTML Files.')
+		print('  2d) All decks, Reddit Markdown.')
+		print('   3) Compare some decks that share spells, Reddit Markdown.')
+
+		print('')
+
+		whatToDo = ''
+		while whatToDo not in ['1a','1b','1c','1d','2a','2b','2c','2d','3']:
+			whatToDo = (input('>>> '))
+
+		print('')
+
+		if len(whatToDo) >= 2:
+			if whatToDo[1] in ['a','A']: displayformats = ['text', 'print']
+			if whatToDo[1] in ['b','B']: displayformats = ['html', 'print']
+			if whatToDo[1] in ['c','C']: displayformats = ['html', 'file']
+			if whatToDo[1] in ['d','D']: displayformats = ['reddit', 'print']
+
+		if whatToDo[0] == '1':
 			displayAllTheDecks = False
 			print('Okay, let\'s look at the cumulative results of one of the decks, formatted in '+', '.join(displayformats)+'. Which deck?')
 			for (i, deckfile) in enumerate(deckdirectory):
@@ -853,9 +871,28 @@ def userInterface():
 			print('')
 			whichDeck = int(input('>>> '))
 			print('')
-		elif whatToDo[0] == '4':
+		elif whatToDo[0] == '2':
 			whichDeck = '-1'
 			displayAllTheDecks = True
+		elif whatToDo == '3':
+			print('We will compare some decks.')
+			for (i, deckfile) in enumerate(deckdirectory):
+				print(format(i,'>4')+') '+deckfile)
+
+			print('')
+			whichDecks = input('Which ones (enter a list with no spaces, e.g. 4,5,8,3)? >>> ').split(',')
+			print('')
+
+			decks_to_compare = []
+			for (i, deckfile) in enumerate(deckdirectory):
+				if str(i) in whichDecks:
+					decks_to_compare.append(deckfile)
+
+			compareDecks(decks_to_compare)
+
+			print('')
+
+			return userInterface()
 
 		for (i, deckfile) in enumerate(deckdirectory):
 			if whichDeck == i or displayAllTheDecks:
@@ -870,7 +907,7 @@ def userInterface():
 		# If we got this far, then we displayed everything we could.
 		print('')
 		return userInterface()
-	elif whatToDo == '5':
+	elif whatToDo == '4':
 		print('This tool uses the hypergeometric distribution to tell you the exact probability of casting certain spells on time assuming:')
 		print('   The deck has all untapped lands that all count toward casting the spell.')
 		print('   You mulligan normally, not prioritizing the spell.')
@@ -1811,16 +1848,24 @@ def displayResults(displaycasts = None, displaydrawsdictionary = None, displaydr
 	displaymaxturns = len(displaycasts)
 
 	if 'html' in displayformat: 
-		header = '<table><tr><th align=center>Card</th>'
+		header = '<table><tr><th align=center>Card</th>\n'
 		for i in range(displaymaxturns):
 			header += '<th align=center width=100>Turn'+str(i+1)+'</th>'
-		header += '</tr>'
+		header += '\n</tr>\n'
+	elif 'reddit' in displayformat:
+		header = '\n Card '
+		for i in range(displaymaxturns):
+			header += ' | Turn '+str(i+1)
+		header += '\n ---'
+		for i in range(displaymaxturns):
+			header += '|----'
 	else:
 		header = ''
 
 	for card in sorted_cardstoiterate:
 		if 'text' in displayformat: percents[card] = ' '*(maxcardlength - len(card)) + card
 		if 'html' in displayformat: percents[card] = '<tr><td align=right>'+card+'</td>'
+		if 'reddit' in displayformat: percents[card] = card
 
 		for i in range(displaymaxturns):
 
@@ -1838,6 +1883,7 @@ def displayResults(displaycasts = None, displaydrawsdictionary = None, displaydr
 
 				if 'text' in displayformat: percents[card] += ('  Cast by '+str(i+1)+': '+'{:>6.1%}'.format(percent)+'')
 				if 'html' in displayformat: percents[card] += ('<td align=center>' + '{:.1%}'.format(percent))
+				if 'reddit' in displayformat: percents[card] += (' | ' + '{:.1%}'.format(percent))
 
 				# This basic margin of error calculation is only valid if we have more than 30 trials and at least 5 successes and at least 5 failures.
 				error = 1.96*math.sqrt(displaycasts[i][card]*(numberofdraws-displaycasts[i][card])/math.pow(numberofdraws,3))
@@ -1846,6 +1892,8 @@ def displayResults(displaycasts = None, displaydrawsdictionary = None, displaydr
 					# Only actually display the margin of error if it is at least 0.1% and if the statistics tells us this is even meaningful.
 					if 'text' in displayformat: percents[card] += ('+-' + '{:<6.1%}'.format(error))
 					if 'html' in displayformat: percents[card] += ('&plusmn;' + '{:.1%}'.format(error) + '</td>')
+					if 'reddit' in displayformat: percents[card] += ('±' + '{:.1%}'.format(error))
+
 				elif error < 0.0005:
 					# If we have the error down below 0.1%, display no error, since it is correct up to the number of significant digits displayed.
 					if 'text' in displayformat: percents[card] += '        '
@@ -1853,6 +1901,7 @@ def displayResults(displaycasts = None, displaydrawsdictionary = None, displaydr
 					# If the problem is a small sample size, go with plus or minus question mark.
 					if 'text' in displayformat: percents[card] += '+-???%  '
 					if 'html' in displayformat: percents[card] += ('&plusmn;' + '???%')
+					if 'reddit' in displayformat: percents[card] += ('±???%')
 
 		if 'html' in displayformat: percents[card] += '</tr>'
 
@@ -1877,6 +1926,113 @@ def displayResults(displaycasts = None, displaydrawsdictionary = None, displaydr
 
 		else:
 			print('Non-html files not implemented.')
+
+def compareDecks(list_of_deckfiles):
+	"""Given a list of deckfiles, we go look at which spells are in multiple of the list, so we can compare how they do."""
+
+	# The plan is to make a list of all the spells; if they appear in more than one deck, then we will show them.
+	# So, if decks_featuring[spell] contains multiple deckfiles, we can display that spell.
+	decks_featuring = {}
+
+	# We want to keep track of all the draws, casts, and maxturns so we don't have to repeatedly look them up.
+	parseddraws = {}
+	parsedcasts = {}
+	parsedmaxturns = {}
+
+	for deckfile in list_of_deckfiles:
+		parseddraws[deckfile], parsedcasts[deckfile], parsedmaxturns[deckfile] = parseResults('results/'+deckfile[:-4]+'-results.txt')
+		for spell in parseddraws[deckfile][0]:
+			if spell in decks_featuring:
+				decks_featuring[spell].append(deckfile)
+			else:
+				decks_featuring[spell] = [deckfile]
+
+	# Now remove all the spells that only appear once.
+	marked_for_deletion = []
+	for spell in decks_featuring:
+		if len(decks_featuring[spell]) <= 1:
+			marked_for_deletion.append(spell)
+	for spell in marked_for_deletion:
+		del decks_featuring[spell]
+
+	# Sort all the spells by CMC, then alphabetically.
+	spellstoiterate = list(decks_featuring.keys())
+	sorted_spellstoiterate = []
+	list_of_cmcs = list(set([cardDatabase[spell]['cmc'] for spell in spellstoiterate]))
+	list_of_cmcs.sort()
+	for cmc in list_of_cmcs:
+		list_of_spells = [spell for spell in spellstoiterate if cardDatabase[spell]['cmc'] == cmc]
+		list_of_spells.sort()
+		sorted_spellstoiterate.extend(list_of_spells)
+
+	# The header will be the decks we looked at. We'll just do this in reddit markdown.
+	header = 'Spell'
+	for deckfile in list_of_deckfiles:
+		header += ' | '+deckfile
+	header += '\n----'
+	for deckfile in list_of_deckfiles:
+		header += '|----'
+
+	# Go through the spells in the right order, and see if any of them are cast "before curve."
+	spells_before_curve = []
+	for spell in sorted_spellstoiterate:
+		cmc = cardDatabase[spell]['cmc']
+		for deckfile in list_of_deckfiles:
+			if len(parsedcasts[deckfile]) >= cmc - 1 and cmc >=2:
+				if spell in parsedcasts[deckfile][cmc - 2]:
+					if parsedcasts[deckfile][cmc - 2][spell] != 0:
+						if spell not in spells_before_curve:
+							spells_before_curve.append(spell)
+
+	# Make a table for the spells cast before curve.
+	if len(spells_before_curve) != 0:
+		print('')
+		print('The following percentages are for casts **ahead of curve**, i.e. cast the turn before their CMC.')
+		print('')
+		print(header)
+		for spell in spells_before_curve:
+			cmc = cardDatabase[spell]['cmc']
+			spellline = spell
+			for deckfile in list_of_deckfiles:
+				spellline += ' | '
+				if len(parsedcasts[deckfile]) >= cmc - 1:
+					if spell in parsedcasts[deckfile][cmc - 2]:
+						if parseddraws[deckfile][cmc - 2][spell] > 0:
+							casts = parsedcasts[deckfile][cmc - 2][spell]
+							draws = parseddraws[deckfile][cmc - 2][spell]
+							percent, error = proportion_confidence_interval(casts,draws)
+							spellline += '{:>6.1%}'.format(percent) + '±' + '{:.1%}'.format(error)
+			print(spellline)
+
+	# Then make a table for the spells on curve.
+	print('')
+	print('The following percentages are for casts **on curve**, i.e. cast the turn of their CMC.')
+	print('')
+	print(header)
+	for spell in sorted_spellstoiterate:
+		cmc = cardDatabase[spell]['cmc']
+		spellline = spell
+		for deckfile in list_of_deckfiles:
+			spellline += ' | '
+			if len(parsedcasts[deckfile]) >= cmc:
+				if spell in parsedcasts[deckfile][cmc - 1]:
+					if parseddraws[deckfile][cmc - 1][spell] > 0:
+						casts = parsedcasts[deckfile][cmc - 1][spell]
+						draws = parseddraws[deckfile][cmc - 1][spell]
+						percent, error = proportion_confidence_interval(casts,draws)
+						spellline += '{:>6.1%}'.format(percent) + '±' + '{:.1%}'.format(error)
+		print(spellline)
+
+	print('')
+
+def proportion_confidence_interval(casts,draws):
+	"""Does the intro statistics 95% confidence interval for a proportion."""
+	if draws != 0:
+		percent = casts / draws
+		error = 1.96*math.sqrt(casts*(draws-casts)/math.pow(draws,3))
+		return percent, error
+	else:
+		return 0, 0
 
 # TODO: Even better debugging output.
 slowMode = False
